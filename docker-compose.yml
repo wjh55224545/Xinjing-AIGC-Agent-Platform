@@ -1,0 +1,54 @@
+# ==========================================
+# 心镜·AIGC智能体平台 Docker Compose 部署
+# ==========================================
+# 第八届CCF开源创新大赛 · 任务三
+# 国产算力平台适配版本
+# ==========================================
+
+version: '3.8'
+
+services:
+  # 后端服务
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mindmirror-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # AI算力平台配置
+      - AI_PLATFORM=${AI_PLATFORM:-gitee_ai}
+      - GITEE_AI_API_KEY=${GITEE_AI_API_KEY}
+      - GITEE_AI_BASE_URL=${GITEE_AI_BASE_URL:-https://api.gitee.ai/v1}
+      - GITEE_AI_MODEL=${GITEE_AI_MODEL:-qwen2.5-7b-instruct}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - AI_FALLBACK_PLATFORMS=${AI_FALLBACK_PLATFORMS:-deepseek}
+      # 华为云OBS
+      - OBS_AK=${OBS_AK}
+      - OBS_SK=${OBS_SK}
+      # 数据库
+      - DATABASE_URL=sqlite:///./data/psych.db
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mindmirror-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    restart: unless-stopped

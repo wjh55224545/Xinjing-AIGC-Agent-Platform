@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>心镜·AIGC智能体平台 - API文档</title>
+    <link rel="stylesheet" href="https://registry.npmmirror.com/swagger-ui-dist/latest/files/swagger-ui.css">
+    <style>
+        html { box-sizing: border-box; overflow-y: scroll; }
+        *, *:before, *:after { box-sizing: inherit; }
+        body { margin: 0; background: #fafafa; }
+        /* 隐藏顶部的 Swagger 默认 logo */
+        .swagger-ui .topbar { display: none; }
+        /* 自定义顶部导航 */
+        .custom-topbar {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: white;
+            font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+        }
+        .custom-topbar .title { font-size: 18px; font-weight: bold; }
+        .custom-topbar .subtitle { font-size: 12px; opacity: 0.7; }
+    </style>
+</head>
+<body>
+    <!-- 自定义顶栏 -->
+    <div class="custom-topbar">
+        <div>
+            <div class="title">心镜 · AIGC智能体平台</div>
+            <div class="subtitle">第八届CCF开源创新大赛 · 国产开源GPU AI创新生态赛 · 任务三</div>
+        </div>
+        <div style="text-align:right; font-size:13px;">
+            <div>算力平台: 沐曦MetaX GPU / Gitee.AI</div>
+            <div style="opacity:0.7;">版本 v2.0.0</div>
+        </div>
+    </div>
+
+    <div id="swagger-ui"></div>
+
+    <script src="https://registry.npmmirror.com/swagger-ui-dist/latest/files/swagger-ui-bundle.js"></script>
+    <script src="https://registry.npmmirror.com/swagger-ui-dist/latest/files/swagger-ui-standalone-preset.js"></script>
+
+    <script>
+        window.onload = function() {
+            // 初始化 Swagger UI
+            const ui = SwaggerUIBundle({
+                url: "/openapi.json",
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+                layout: "StandaloneLayout",
+                defaultModelsExpandDepth: -1,
+                defaultModelExpandDepth: 2,
+                docExpansion: "list",
+                filter: true,
+                showExtensions: true,
+                showCommonExtensions: true,
+                tryItOutEnabled: true,
+                syntaxHighlight: { theme: "monokai" },
+                onComplete: function() {
+                    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    // Swagger UI 中文化翻译脚本
+                    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    const translations = {
+                        // 主要按钮和标签
+                        "Try it out": "试一试",
+                        "Cancel": "取消",
+                        "Execute": "执行",
+                        "Clear": "清除",
+                        "Close": "关闭",
+                        "Send Request": "发送请求",
+                        "Download": "下载",
+                        "Copy": "复制",
+                        "Expand all": "全部展开",
+                        "Collapse all": "全部折叠",
+                        "Show/Hide": "显示/隐藏",
+                        "Hide": "隐藏",
+                        "Show": "显示",
+                        // 请求/响应
+                        "Request": "请求",
+                        "Request body": "请求体",
+                        "Request URL": "请求地址",
+                        "Server response": "服务器响应",
+                        "Response": "响应",
+                        "Responses": "响应信息",
+                        "Response body": "响应体",
+                        "Response headers": "响应头",
+                        "Code": "状态码",
+                        "Description": "说明",
+                        "No content": "无内容",
+                        // 参数
+                        "Parameters": "参数",
+                        "Parameter": "参数",
+                        "Header parameters": "请求头参数",
+                        "Query parameters": "查询参数",
+                        "Path parameters": "路径参数",
+                        "Cookie parameters": "Cookie参数",
+                        "No parameters": "无参数",
+                        "Schema": "数据结构",
+                        "Example": "示例",
+                        "Examples": "示例",
+                        "Media type": "媒体类型",
+                        // 其他
+                        "Authorize": "认证",
+                        "Available authorizations": "可用认证方式",
+                        "Authorizations": "认证",
+                        "Select all": "全选",
+                        "Deselect all": "取消全选",
+                        "Filter by tag": "按标签筛选",
+                        "Search": "搜索",
+                        "Loading...": "加载中...",
+                        "No operations available": "暂无可用接口",
+                        "Deprecated": "已弃用",
+                        "Warning": "警告",
+                        "Default": "默认",
+                        "Value": "值",
+                        "string": "字符串",
+                        "integer": "整数",
+                        "number": "数字",
+                        "boolean": "布尔值",
+                        "array": "数组",
+                        "object": "对象",
+                        "required": "必填",
+                        "nullable": "可为空",
+                        "Links": "关联链接",
+                        "No links": "无关联链接",
+                        "Server": "服务器",
+                        "Servers": "服务器列表",
+                        "Base URL": "基础地址",
+                        // 模型/结构
+                        "Schemas": "数据模型",
+                        "Model": "模型",
+                        "Models": "数据模型",
+                        "Body": "请求体",
+                        // Curl
+                        "Curl": "Curl命令",
+                        "Request syntax": "请求语法",
+                    };
+
+                    // 遍历翻译所有匹配的文本节点
+                    function translateElement(el) {
+                        if (!el) return;
+                        // 翻译文本节点
+                        if (el.nodeType === 3 && el.textContent && el.textContent.trim()) {
+                            let text = el.textContent.trim();
+                            if (translations[text]) {
+                                el.textContent = el.textContent.replace(text, translations[text]);
+                            }
+                        }
+                        // 递归处理子节点
+                        if (el.childNodes) {
+                            el.childNodes.forEach(translateElement);
+                        }
+                        // 翻译 placeholder 属性
+                        if (el.getAttribute) {
+                            const placeholder = el.getAttribute('placeholder');
+                            if (placeholder && translations[placeholder]) {
+                                el.setAttribute('placeholder', translations[placeholder]);
+                            }
+                        }
+                        // 翻译 aria-label
+                        if (el.getAttribute) {
+                            const ariaLabel = el.getAttribute('aria-label');
+                            if (ariaLabel && translations[ariaLabel]) {
+                                el.setAttribute('aria-label', translations[ariaLabel]);
+                            }
+                        }
+                    }
+
+                    // 初始翻译
+                    translateElement(document.getElementById('swagger-ui'));
+
+                    // 监听 DOM 变化，动态翻译新出现的元素
+                    const observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            mutation.addedNodes.forEach(function(node) {
+                                if (node.nodeType === 1) {
+                                    setTimeout(function() {
+                                        translateElement(node);
+                                    }, 50);
+                                }
+                            });
+                        });
+                    });
+
+                    observer.observe(document.getElementById('swagger-ui'), {
+                        childList: true,
+                        subtree: true,
+                    });
+                }
+            });
+        };
+    </script>
+</body>
+</html>

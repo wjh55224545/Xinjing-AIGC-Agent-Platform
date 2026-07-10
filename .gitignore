@@ -1,0 +1,48 @@
+# ==========================================
+# 心镜·AIGC智能体平台 .gitignore
+# ==========================================
+
+# Python 虚拟环境
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# 环境变量（含API密钥，绝对不能提交！）
+.env
+
+# IDE 配置
+.idea/
+*.swp
+*.swo
+
+# 测试缓存
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 运行时数据
+data/
+*.db
+*.sqlite3
+
+# 上传文件
+backend/data/uploads/
+backend/data/camera/
+backend/data/obs/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+.docker/
+
+# Node
+frontend/node_modules/
+frontend/dist/

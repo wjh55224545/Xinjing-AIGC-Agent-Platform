@@ -1,0 +1,468 @@
+/* ═══════════════════════════════════════════
+   心镜 MindMirror — Design System
+   极简白/灰 + 墨绿自然
+   ═══════════════════════════════════════════ */
+
+/* ── Reset ─────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Inter", sans-serif;
+  background: #f8faf7;
+  color: #1a231c;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Layout ────────────────────────────── */
+#app {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+#app-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Sidebar ───────────────────────────── */
+.sidebar {
+  width: 240px;
+  background: #fafbf9;
+  border-right: 1px solid #e5e9e4;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar .logo {
+  padding: 28px 24px 20px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a231c;
+  letter-spacing: 0.02em;
+}
+
+.sidebar nav {
+  flex: 1;
+  padding: 8px 12px;
+}
+
+.sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  color: #788278;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  margin-bottom: 2px;
+  transition: all 0.15s ease;
+}
+
+.sidebar nav a:hover {
+  color: #1a231c;
+  background: #edf2ec;
+}
+
+.sidebar nav a.router-link-active {
+  color: #2d6a4f;
+  background: #e8f5e9;
+  font-weight: 600;
+}
+
+/* ── Main Area ─────────────────────────── */
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  background: #f8faf7;
+}
+
+/* ── Header ────────────────────────────── */
+.header {
+  height: 64px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  border-bottom: 1px solid #e5e9e4;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a231c;
+  flex-shrink: 0;
+}
+
+.header .status {
+  font-size: 13px;
+  font-weight: 400;
+  color: #9aa89e;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.header .status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2d6a4f;
+  box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.15);
+}
+
+/* ── Page (scroll zone) ────────────────── */
+.page {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+  min-height: 0;
+}
+
+/* ── Card ──────────────────────────────── */
+.card {
+  background: #fff;
+  border: 1px solid #e5e9e4;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.card h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 18px;
+  color: #1a231c;
+  letter-spacing: 0.01em;
+}
+
+/* ── Stat Grid ─────────────────────────── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid #e5e9e4;
+  border-radius: 12px;
+  padding: 20px 24px;
+  border-left: 4px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  border-left-color: #2d6a4f;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.stat-card .label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #9aa89e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.stat-card .value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a231c;
+  letter-spacing: -0.02em;
+}
+
+.stat-card .value.green  { color: #2d6a4f; }
+.stat-card .value.yellow { color: #b45309; }
+.stat-card .value.red    { color: #b91c1c; }
+
+/* ── Buttons ───────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: #2d6a4f;
+  color: #fff;
+  border-color: #2d6a4f;
+}
+.btn-primary:hover {
+  background: #1b4332;
+  border-color: #1b4332;
+}
+
+.btn-success {
+  background: #e8f5e9;
+  color: #2d6a4f;
+  border-color: #c8e6c9;
+}
+.btn-success:hover {
+  background: #c8e6c9;
+}
+
+.btn-warning {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+.btn-warning:hover {
+  background: #fde68a;
+}
+
+.btn-danger {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+.btn-danger:hover {
+  background: #fecaca;
+}
+
+/* ── Table ─────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f2ef;
+}
+
+th {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9aa89e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+td {
+  font-size: 14px;
+  color: #3a4a3e;
+}
+
+tbody tr:hover td {
+  background: #f8faf7;
+}
+
+/* ── Badge ─────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.badge.green  { background: #e8f5e9; color: #2d6a4f; }
+.badge.yellow { background: #fef3c7; color: #92400e; }
+.badge.red    { background: #fee2e2; color: #991b1b; }
+
+/* ── Upload Zone ───────────────────────── */
+.upload-zone {
+  border: 2px dashed #c8d6ca;
+  border-radius: 12px;
+  padding: 48px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #fafbf9;
+}
+
+.upload-zone:hover {
+  border-color: #2d6a4f;
+  background: #f0f5f1;
+}
+
+/* ── SSE Panel ─────────────────────────── */
+.sse-panel {
+  background: #1a231c;
+  color: #9ab8a8;
+  border-radius: 10px;
+  padding: 18px;
+  max-height: 480px;
+  overflow-y: auto;
+  font-family: "Fira Code", "Cascadia Code", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.sse-panel .thought     { color: #e5c76b; }
+.sse-panel .action      { color: #7ec8a0; }
+.sse-panel .observation { color: #8bb897; }
+.sse-panel .final       { color: #b8a9d6; }
+.sse-panel .error       { color: #e57373; }
+
+/* ── Chart Box ─────────────────────────── */
+.chart-box {
+  width: 100%;
+  min-height: 280px;
+  height: 320px;
+}
+
+/* ── Flex Row (dashboard columns) ──────── */
+.flex-row {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.flex-row > * {
+  flex: 1;
+  min-width: 280px;
+}
+
+/* ── Form Controls ─────────────────────── */
+input,
+select {
+  padding: 9px 14px;
+  border: 1px solid #d8ddd6;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #1a231c;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus,
+select:focus {
+  border-color: #2d6a4f;
+  box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.1);
+}
+
+/* ── Filter Bar ────────────────────────── */
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+/* ── Utilities ─────────────────────────── */
+.mt-6 { margin-top: 24px; }
+
+/* ── Responsive ────────────────────────── */
+@media (max-width: 1100px) {
+  .sidebar {
+    width: 200px;
+  }
+  .sidebar .logo {
+    font-size: 16px;
+    padding: 24px 18px 16px;
+  }
+  .sidebar nav a {
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 800px) {
+  .sidebar {
+    width: 60px;
+  }
+  .sidebar .logo {
+    font-size: 0;
+    padding: 16px 8px;
+    text-align: center;
+  }
+  .sidebar .logo::after {
+    content: "心";
+    font-size: 22px;
+    font-weight: 700;
+    color: #2d6a4f;
+  }
+  .sidebar nav {
+    padding: 4px;
+  }
+  .sidebar nav a {
+    justify-content: center;
+    padding: 12px 4px;
+    font-size: 0;
+    border-radius: 6px;
+  }
+  .sidebar nav a::first-letter {
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .page {
+    padding: 20px 16px;
+  }
+  .header {
+    padding: 0 16px;
+  }
+}
+
+@media (max-width: 520px) {
+  .page {
+    padding: 16px 12px;
+  }
+  .card {
+    padding: 18px;
+    border-radius: 10px;
+  }
+  .stat-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .stat-card {
+    padding: 14px 16px;
+  }
+  .stat-card .value {
+    font-size: 24px;
+  }
+  .flex-row {
+    flex-direction: column;
+  }
+  .flex-row > * {
+    min-width: unset;
+  }
+  .header {
+    height: 52px;
+    font-size: 14px;
+  }
+}
