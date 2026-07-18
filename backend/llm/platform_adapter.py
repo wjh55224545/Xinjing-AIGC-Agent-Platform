@@ -27,12 +27,13 @@ try:
     from langchain_core.language_models import BaseChatModel
     from langchain_core.messages import BaseMessage
     from langchain_core.outputs import ChatResult
-    from langchain_core.callbacks import CallbackManagerForLLMRun
+    from langchain_core.callbacks import CallbackManagerForLLMRun, AsyncCallbackManagerForLLMRun
     _LANGCHAIN_AVAILABLE = True
 except ImportError:
     _LANGCHAIN_AVAILABLE = False
     ChatOpenAI = None  # type: ignore
     BaseChatModel = object  # type: ignore
+    AsyncCallbackManagerForLLMRun = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,13 @@ class ExtraBodyChatOpenAI(ChatOpenAI):
 
     extra_body: dict | None = None
 
+    def _get_request_payload(self, input_, *, stop=None, **kwargs):
+        """重写 _get_request_payload，注入 extra_body 并移除不兼容参数。"""
+        kwargs.pop("tool_choice", None)
+        if self.extra_body:
+            kwargs["extra_body"] = self.extra_body
+        return super()._get_request_payload(input_, stop=stop, **kwargs)
+
     def _generate(
         self,
         messages: List[BaseMessage],
@@ -63,10 +71,22 @@ class ExtraBodyChatOpenAI(ChatOpenAI):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> ChatResult:
-        """重写 _generate，在 payload 中注入 extra_body。"""
+        kwargs.pop("tool_choice", None)
         if self.extra_body:
             kwargs["extra_body"] = self.extra_body
         return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+
+    async def _agenerate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        kwargs.pop("tool_choice", None)
+        if self.extra_body:
+            kwargs["extra_body"] = self.extra_body
+        return await super()._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
 
 
 class Platform(Enum):
@@ -143,27 +163,24 @@ class PlatformAdapter:
         temperature: float = 0.7,
         max_tokens: int = 2048,
     ):
-        # 从环境变量或参数确定平台
-        env_platform = os.getenv("AI_PLATFORM", "gitee_ai")
+        from backend.config import get_settings
+        settings = get_settings()
+
+        # 从 Settings 或参数确定平台（Settings 自动加载 .env）
+        env_platform = settings.ai_platform if hasattr(settings, 'ai_platform') else 'gitee_ai'
         self.platform = Platform(platform or env_platform)
         self._config = PLATFORM_CONFIGS.get(
             self.platform.value,
             PLATFORM_CONFIGS["gitee_ai"]
         )
 
-        # API Key 和 Base URL 可从环境变量覆盖
-        self.api_key = os.getenv(
-            f"{self.platform.value.upper()}_API_KEY",
-            os.getenv("AI_API_KEY", "")
-        )
-        self.base_url = os.getenv(
-            f"{self.platform.value.upper()}_BASE_URL",
-            self._config["base_url"]
-        )
-        self.model = model or os.getenv(
-            f"{self.platform.value.upper()}_MODEL",
-            self._config["default_model"]
-        )
+        # API Key 和 Base URL 从 Settings 读取（自动加载 .env）
+        self.api_key = getattr(settings, f'{self.platform.value}_api_key', None) or \
+                       getattr(settings, 'ai_api_key', '') or ''
+        self.base_url = getattr(settings, f'{self.platform.value}_base_url', None) or \
+                        self._config["base_url"]
+        self.model = model or getattr(settings, f'{self.platform.value}_model', None) or \
+                     self._config["default_model"]
 
         self.streaming = streaming
         self.temperature = temperature
@@ -177,7 +194,8 @@ class PlatformAdapter:
 
     def _parse_fallback_platforms(self) -> list[str]:
         """解析备用平台列表"""
-        fallback_str = os.getenv("AI_FALLBACK_PLATFORMS", "deepseek")
+        from backend.config import get_settings
+        fallback_str = get_settings().ai_fallback_platforms or "deepseek"
         return [p.strip() for p in fallback_str.split(",") if p.strip()]
 
     def create_llm(self) -> BaseChatModel:
@@ -210,6 +228,8 @@ class PlatformAdapter:
             "max_retries": 2,
         }
 
+        # moark.com 平台使用 ExtraBodyChatOpenAI，自动移除不兼容的 tool_choice
+
         if extra_kwargs:
             return ExtraBodyChatOpenAI(
                 **common_params,
@@ -224,16 +244,16 @@ class PlatformAdapter:
 
         当主平台不可用时，自动切换到备用平台。
         """
+        from backend.config import get_settings
+        _settings = get_settings()
+
         # 如果主平台的API Key未配置，直接尝试fallback
         if not self.api_key and self._fallback_platforms:
             for fallback_name in self._fallback_platforms:
                 fallback_config = PLATFORM_CONFIGS.get(fallback_name)
                 if not fallback_config:
                     continue
-                fallback_key = os.getenv(
-                    f"{fallback_name.upper()}_API_KEY",
-                    os.getenv("AI_API_KEY", "")
-                )
+                fallback_key = getattr(_settings, f'{fallback_name}_api_key', None) or ''
                 if fallback_key:
                     logger.warning(
                         f"主平台 {self._config['name']} 未配置API Key，"
@@ -268,13 +288,12 @@ class PlatformAdapter:
     @classmethod
     def list_platforms(cls) -> list[dict]:
         """列出所有支持的平台"""
+        from backend.config import get_settings
+        _settings = get_settings()
         result = []
         for key, config in PLATFORM_CONFIGS.items():
-            env_key = f"{key.upper()}_API_KEY"
-            is_configured = bool(
-                os.getenv(env_key) or
-                (key in ["gitee_ai", "custom"] and os.getenv("AI_API_KEY"))
-            )
+            env_key = f"{key}_api_key"
+            is_configured = bool(getattr(_settings, env_key, None))
             result.append({
                 "id": key,
                 "name": config["name"],
@@ -309,22 +328,22 @@ def get_llm(
     获取 LLM 实例的统一入口
 
     Args:
-        platform: 平台ID (gitee_ai / deepseek / local / custom)，默认从环境变量读取
+        platform: 平台ID (lingshu / gitee_ai / deepseek / local / custom)，默认从 Settings 读取
         streaming: 是否启用流式输出
         use_fallback: 是否启用fallback机制
 
     Returns:
         LangChain BaseChatModel 实例
 
-    环境变量配置:
-        AI_PLATFORM=gitee_ai           # 主平台
-        GITEE_AI_API_KEY=your_key      # Gitee.AI API密钥
-        GITEE_AI_BASE_URL=...          # Gitee.AI API地址（可选）
-        GITEE_AI_MODEL=qwen2.5-7b      # Gitee.AI 模型名
-        DEEPSEEK_API_KEY=your_key      # DeepSeek API密钥（备用）
+    环境变量配置 (.env 或 Settings):
+        AI_PLATFORM=lingshu           # 主平台
+        LINGSHU_API_KEY=your_key      # Lingshu API密钥
+        DEEPSEEK_API_KEY=your_key     # DeepSeek API密钥（备用）
         AI_FALLBACK_PLATFORMS=deepseek # 备用平台
     """
-    cache_key = f"{platform or os.getenv('AI_PLATFORM', 'gitee_ai')}_{streaming}"
+    from backend.config import get_settings
+    default_platform = get_settings().ai_platform or 'gitee_ai'
+    cache_key = f"{platform or default_platform}_{streaming}"
 
     if cache_key not in _llm_cache:
         adapter = PlatformAdapter(platform=platform, streaming=streaming)
