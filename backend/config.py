@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     # Lingshu / Qwen3-8B — moark.com 平台（OpenAI 兼容）
     lingshu_api_key: str = ""
     lingshu_base_url: str = "https://api.moark.com/v1"
-    lingshu_model: str = "Qwen3-8B"
-    lingshu_top_k: int = 50
+    lingshu_model: str = "Lingshu-32B"
+    lingshu_top_k: int = -1
 
     # Gitee.AI (沐曦 MetaX GPU) - 国产开源GPU算力
     gitee_ai_api_key: str = ""

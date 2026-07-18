@@ -29,7 +29,6 @@ def _get_openai_client() -> OpenAI | None:
         return OpenAI(
             base_url=settings.lingshu_base_url,
             api_key=api_key,
-            default_headers={"X-Failover-Enabled": "true"},
         )
     except Exception as e:
         logger.warning(f"创建 OpenAI 客户端失败，降级到模板模式: {e}")
@@ -68,13 +67,14 @@ def llm_generate(
             model=settings.lingshu_model,
             temperature=temperature,
             max_tokens=max_tokens,
-            top_p=0.7,
-            extra_body={"top_k": 50},
-            frequency_penalty=1.0,
+            top_p=1.0,
+            extra_body={"top_k": -1},
+            frequency_penalty=0.0,
         )
         content = response.choices[0].message.content
         if content:
             # 移除 moark.com 模型返回的 <think>...</think> 推理标记
+            # （降级处理：部分模型可能将 reasoning_content 放入 content）
             import re
             content = re.sub(r'<\s*think\s*>.*?<\s*/\s*think\s*>', '', content, flags=re.DOTALL)
             content = content.strip()

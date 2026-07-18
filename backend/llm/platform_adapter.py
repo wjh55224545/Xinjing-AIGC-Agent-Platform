@@ -83,11 +83,11 @@ PLATFORM_CONFIGS: Dict[str, Dict[str, Any]] = {
     "lingshu": {
         "name": "Qwen3-8B (moark.com 平台)",
         "base_url": "https://api.moark.com/v1",
-        "default_model": "Qwen3-8B",
+        "default_model": "Lingshu-32B",
         "description": "moark.com 平台 OpenAI 兼容 API，支持 reasoning 和流式输出",
         "is_domestic": True,
         "provider": "moark.com",
-        "extra_kwargs": {"top_k": 50},
+        "extra_kwargs": {"top_k": -1},
     },
     "gitee_ai": {
         "name": "Gitee.AI (沐曦GPU)",
@@ -205,17 +205,10 @@ class PlatformAdapter:
             "streaming": self.streaming,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
-            "frequency_penalty": 1.0,
+            "frequency_penalty": 0.0,
             "timeout": 60,
             "max_retries": 2,
         }
-
-        # moark.com 平台需要 X-Failover-Enabled 请求头
-        if self.platform == Platform.LINGSHU:
-            import httpx
-            common_params["http_client"] = httpx.Client(
-                headers={"X-Failover-Enabled": "true"}
-            )
 
         if extra_kwargs:
             return ExtraBodyChatOpenAI(
