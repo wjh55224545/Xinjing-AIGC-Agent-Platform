@@ -8,14 +8,14 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
 [![Vue](https://img.shields.io/badge/Vue-3.x-4FC08D.svg)](https://vuejs.org/)
 [![GPU](https://img.shields.io/badge/GPU-沐曦MetaX-red.svg)](https://www.metax-tech.com/)
-[![LLM](https://img.shields.io/badge/LLM-灵枢Lingshu--32B-blue.svg)](https://api.moark.com)
+[![LLM](https://img.shields.io/badge/LLM-Qwen3--8B%20(moark.com)-blue.svg)](https://api.moark.com/v1)
 [![VibraImage](https://img.shields.io/badge/引擎-VibraImage-purple.svg)]()
 
 ## 👥 团队信息
 
 | 项目 | 内容 |
 |------|------|
-| **参赛队名** | 码上成功队 |
+| **参赛队名** | 码到成功队 |
 | **队　长** | 王建豪 |
 | **联系方式** | 18928109264 |
 | **组员名单** | 吴锴嘉、何柏翰 |
@@ -25,11 +25,11 @@
 
 ## 📖 项目简介
 
-**心镜**是一个部署在智慧教室环境中的AIGC智能体系统。平台以**沐曦MetaX GPU国产算力**为底座，搭载**灵枢 Lingshu-32B 医疗大模型**作为核心推理引擎，集成**VibraImage前庭振动识别引擎**（Viktor Minkin专著公式体系），通过**5智能体协作架构**，实现从双模态情绪感知到AIGC心理内容生成的全流程智能化。
+**心镜**是一个部署在智慧教室环境中的AIGC智能体系统。平台以**沐曦MetaX GPU国产算力**为底座，搭载**moark.com 平台 Qwen3-8B 大模型**作为核心推理引擎，集成**VibraImage前庭振动识别引擎**（Viktor Minkin专著公式体系），通过**5智能体协作架构**，实现从双模态情绪感知到AIGC心理内容生成的全流程智能化。
 
 ### 一句话理解
 
-**教室里的"情绪CT机" + "AI心理报告生成器"——沐曦GPU驱动，灵枢医疗大模型推理，VibraImage振动分析，多Agent协作，全流程AIGC。**
+**教室里的"情绪CT机" + "AI心理报告生成器"——沐曦GPU驱动，moark.com Qwen3-8B大模型推理，VibraImage振动分析，多Agent协作，全流程AIGC。**
 
 ---
 
@@ -37,9 +37,9 @@
 
 | 赛道要求 | 本项目实现 |
 |---------|-----------|
-| 基于国产算力平台 | ✅ 沐曦MetaX GPU + 灵枢Lingshu-32B医疗大模型，全链路国产化 |
-| AIGC能力 | ✅ 灵枢大模型驱动：心理报告、干预方案、家校沟通函、成长叙事 |
-| 多Agent协作 | ✅ 5智能体（感知→分析→报告→预警→协调），灵枢ReAct推理 |
+| 基于国产算力平台 | ✅ 沐曦MetaX GPU + moark.com Qwen3-8B 大模型，全链路国产化 |
+| AIGC能力 | ✅ Qwen3-8B 大模型驱动：心理报告、干预方案、家校沟通函、成长叙事（LLM直接生成，不可用时自动降级模板） |
+| 多Agent协作 | ✅ 5智能体（感知→分析→报告→预警→协调），Qwen3-8B ReAct推理 |
 | 产品化落地 | ✅ Web前后端 + Docker + API文档 + 56项测试全通过 |
 | 开源合规 | ✅ Apache 2.0 License，完整文档 |
 
@@ -79,9 +79,9 @@
 ┌──────────────────────▼───────────────────────────────────────┐
 │               国产AI算力平台                                  │
 │  ┌──────────────────────┐ ┌──────────────┐ ┌──────────────┐ │
-│  │ 灵枢 Lingshu-32B     │ │ DeepSeek     │ │ 本地/自定义   │ │
-│  │ ★ 主平台 · 沐曦GPU   │ │ ☆ 备用       │ │              │ │
-│  │ 32B医疗大模型        │ │ 国产大模型    │ │              │ │
+│  │ 灵枢 / Qwen3-8B      │ │ DeepSeek     │ │ 本地/自定义   │ │
+│  │ ★ 主平台 · moark.com  │ │ ☆ 备用       │ │              │ │
+│  │ OpenAI兼容·流式推理   │ │ 国产大模型    │ │              │ │
 │  └──────────────────────┘ └──────────────┘ └──────────────┘ │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -90,10 +90,11 @@
 
 ## ✨ 核心特性
 
-### 🧠 灵枢 Lingshu-32B 医疗大模型 ★
-- 32B参数，沐曦MetaX GPU推理，专长心理学/医学领域
-- 5个智能体的ReAct推理全部由灵枢驱动
-- 支持 `ExtraBodyChatOpenAI` 适配非标准API参数
+### 🧠 moark.com Qwen3-8B 大模型 ★
+- 通过 moark.com 平台 OpenAI 兼容 API 调用，支持流式推理和 reasoning
+- 5个智能体的ReAct推理全部由该模型驱动
+- 支持 `ExtraBodyChatOpenAI` 适配非标准API参数（如 `top_k`、`frequency_penalty`）
+- AIGC 生成器优先 LLM 直接生成，不可用时自动降级模板模式
 - 切换平台仅需改一行配置：`AI_PLATFORM=lingshu`
 
 ### 🔬 VibraImage前庭振动引擎 ★
@@ -253,9 +254,9 @@ cp .env.template .env
 
 ```bash
 AI_PLATFORM=lingshu
-LINGSHU_API_KEY=你的灵枢API密钥
+LINGSHU_API_KEY=你的moark平台API密钥
 LINGSHU_BASE_URL=https://api.moark.com/v1
-LINGSHU_MODEL=Lingshu-32B
+LINGSHU_MODEL=Qwen3-8B
 
 # 备用平台（灵枢不可用时自动切换）
 AI_FALLBACK_PLATFORMS=deepseek
@@ -309,10 +310,10 @@ python -m pytest tests/ -v
 | 学生 | `GET /api/students` | 学生列表 |
 | 预警 | `GET /api/alerts` | 预警列表 |
 | 上传 | `POST /api/upload/video` | 上传视频触发采集 |
-| **AIGC** | `POST /api/aigc/report/daily` | **灵枢生成心理评估日报** |
-| **AIGC** | `POST /api/aigc/plan/intervention` | **灵枢生成干预方案** |
-| **AIGC** | `POST /api/aigc/letter/parent` | **灵枢生成家校沟通函** |
-| **AIGC** | `POST /api/aigc/narrative/growth` | **灵枢生成成长叙事** |
+| **AIGC** | `POST /api/aigc/report/daily` | **Qwen3-8B 生成心理评估日报** |
+| **AIGC** | `POST /api/aigc/plan/intervention` | **Qwen3-8B 生成干预方案** |
+| **AIGC** | `POST /api/aigc/letter/parent` | **Qwen3-8B 生成家校沟通函** |
+| **AIGC** | `POST /api/aigc/narrative/growth` | **Qwen3-8B 生成成长叙事** |
 | 智能体 | `GET /api/agents/info` | 多智能体系统信息 |
 | 智能体 | `GET /api/agents/platform` | 国产算力平台信息 |
 | 智能体 | `POST /api/agents/trigger/inner` | 触发情绪采集 |
@@ -338,7 +339,7 @@ python -m pytest tests/ -v
 
 ```bash
 # 编辑 .env 文件切换AI平台
-AI_PLATFORM=lingshu     # 使用灵枢 Lingshu-32B (推荐)
+AI_PLATFORM=lingshu     # 使用 moark.com Qwen3-8B (推荐)
 AI_PLATFORM=gitee_ai    # 使用 Gitee.AI 平台
 AI_PLATFORM=deepseek    # 使用 DeepSeek (备用)
 ```
@@ -444,7 +445,7 @@ curl http://localhost:8000/api/agents/platform
 │   │   ├── core/            #    帧差分/频率分析/直方图/空间/频谱
 │   │   ├── emotions/        #    E1-E12参数 + K值计算
 │   │   └── utils/           #    10,266人常模数据
-│   ├── llm/                 # AI平台适配层（灵枢/DeepSeek/本地）
+│   ├── llm/                 # AI平台适配层（moark/DeepSeek/本地）
 │   ├── graph/               # LangGraph双环状态机
 │   ├── tools/               # 情绪识别/VibraImage/心理分析/反馈/OBS
 │   ├── api/routes/          # REST API（含VibraImage端点）
@@ -466,7 +467,7 @@ curl http://localhost:8000/api/agents/platform
 
 | 层级 | 技术 | 说明 |
 |------|------|------|
-| **主推理引擎** | **灵枢 Lingshu-32B** | **沐曦GPU · 32B医疗大模型 ★** |
+| **主推理引擎** | **moark.com Qwen3-8B** | **沐曦GPU · OpenAI兼容API ★** |
 | 备用推理 | DeepSeek | 自动Fallback |
 | 前庭振动 | VibraImage + YOLOv8n | Minkin专著公式体系 ★ |
 | 后端 | FastAPI + LangGraph | 异步Web + AI编排 |
@@ -481,4 +482,4 @@ curl http://localhost:8000/api/agents/platform
 >
 > **任务**: 任务三 - 基于国产算力平台的AIGC与智能体开发与应用
 >
-> **算力支持**: 沐曦MetaX GPU + 灵枢Lingshu-32B医疗大模型（moark.com）
+> **算力支持**: 沐曦MetaX GPU + moark.com Qwen3-8B 大模型

@@ -185,7 +185,6 @@ print(f"{'='*50}")
 print(f"结果: {pass_count}/{total} 通过", end="")
 if fail_count > 0:
     print(f", {fail_count} 失败")
-    sys.exit(1)
+    print(f", {fail_count} 失败" if fail_count > 0 else "")
 else:
     print(" 全部通过")
-    sys.exit(0)

@@ -15,6 +15,7 @@ from backend.aigc.templates.plan_templates import (
     RISK_LEVEL_MEASURES,
     SUPPORT_RESOURCES_LIST,
 )
+from backend.aigc.llm_client import llm_generate as _llm_generate
 
 logger = logging.getLogger(__name__)
 
@@ -54,34 +55,34 @@ class PlanGenerator:
         factors = risk_factors or []
         ind = indicators or {}
 
-        # 风险等级信息
+        name = student_name or "未知学生"
+        plan_id = self._generate_plan_id(name)
+        plan_date = datetime.now().strftime("%Y-%m-%d")
+
+        # ---- 优先尝试 LLM 生成 ----
+        llm_text = self._try_llm_generate(name, risk_level, factors, ind, plan_id)
+        if llm_text:
+            return {
+                "plan_type": "intervention",
+                "student_name": student_name,
+                "plan_id": plan_id,
+                "risk_level": risk_level,
+                "plan_text": llm_text,
+                "generated_by": "心镜·AIGC智能体 (moark.com Qwen3-8B)",
+                "generated_at": plan_date,
+            }
+
+        # ---- LLM 不可用，降级到模板模式 ----
         emoji, level_text = RISK_LEVEL_MAP.get(risk_level, RISK_LEVEL_MAP["green"])
-
-        # 生成方案编号
-        plan_id = self._generate_plan_id(student_name)
-
-        # 问题诊断
         diagnosis = self._generate_diagnosis(risk_level, factors, ind)
-
-        # 干预目标
         goals = self._generate_goals(risk_level, factors, ind)
-
-        # 具体措施
         measures = self._generate_measures(risk_level, factors, ind)
-
-        # 资源支持
         resources = self._generate_resources(risk_level)
-
-        # 预期效果
         outcomes = self._generate_outcomes(risk_level)
-
-        # 评估检查点
         checkpoints = self._generate_checkpoints(risk_level)
 
-        # 格式化方案
-        plan_date = datetime.now().strftime("%Y-%m-%d")
         plan_text = INTERVENTION_PLAN_TEMPLATE.format(
-            student_name=student_name or "未知学生",
+            student_name=name,
             date=plan_date,
             risk_level_emoji=emoji,
             risk_level_text=level_text,
@@ -100,9 +101,51 @@ class PlanGenerator:
             "plan_id": plan_id,
             "risk_level": risk_level,
             "plan_text": plan_text,
-            "generated_by": "心镜·AIGC智能体 (沐曦MetaX GPU)",
+            "generated_by": "心镜·AIGC智能体 (模板模式)",
             "generated_at": plan_date,
         }
+
+    def _try_llm_generate(
+        self,
+        student_name: str,
+        risk_level: str,
+        risk_factors: list,
+        indicators: dict,
+        plan_id: str,
+    ) -> str | None:
+        """尝试使用 LLM 生成干预方案，失败返回 None。"""
+        factors_str = "\n".join(f"- {f}" for f in risk_factors) if risk_factors else "- 无明显风险因素"
+        level_map = {"green": "低风险 - 正常关注", "yellow": "中风险 - 需要关注", "red": "高风险 - 紧急干预"}
+        level_text = level_map.get(risk_level, "未知")
+
+        system_prompt = (
+            "你是一位资深的学校心理健康教育专家，负责为学生制定个性化心理干预方案。"
+            "请用中文撰写，语言专业、具体、可操作。使用 Markdown 格式。"
+        )
+
+        user_prompt = f"""请为 {student_name} 同学生成个性化心理干预方案。
+
+## 基本信息
+- 方案编号：{plan_id}
+- 风险等级：{risk_level}（{level_text}）
+- 情绪稳定性指数：{indicators.get('emotional_stability_index', 'N/A')}
+- 综合心理健康评分：{indicators.get('overall_mental_health_score', 'N/A')}
+- 情绪恢复速度：{indicators.get('emotion_recovery_speed', 'N/A')}
+
+## 风险因素
+{factors_str}
+
+请按以下结构输出完整的干预方案：
+1. **问题诊断** — 基于风险因素的具体分析
+2. **干预目标** — 3-5个明确可量化的目标
+3. **具体措施** — 按紧急程度排序的具体步骤
+4. **资源支持** — 可利用的校内外资源
+5. **预期效果** — 各时间节点的预期改善
+6. **评估计划** — 检查点和评估指标表格
+
+根据风险等级调整方案紧急程度和措辞力度。"""
+
+        return _llm_generate(system_prompt, user_prompt, max_tokens=2048)
 
     def _generate_plan_id(self, student_name: str) -> str:
         """生成方案编号"""

@@ -18,8 +18,8 @@ export function acknowledgeAlert(id) { return api.patch(`/alerts/${id}/acknowled
 export function fetchDailyReport(studentId, date) {
   return api.get("/reports/daily", { params: { student_id: studentId, date } }).then(r => r.data);
 }
-export function triggerInner() { return api.post("/agent/trigger/inner").then(r => r.data); }
-export function triggerOuter() { return api.post("/agent/trigger/outer").then(r => r.data); }
+export function triggerInner() { return api.post("/agents/trigger/inner").then(r => r.data); }
+export function triggerOuter() { return api.post("/agents/trigger/outer").then(r => r.data); }
 export function uploadVideo(formData) {
   return api.post("/upload/video", formData, { headers: { "Content-Type": "multipart/form-data" } }).then(r => r.data);
 }

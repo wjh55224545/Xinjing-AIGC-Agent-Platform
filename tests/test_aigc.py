@@ -38,12 +38,13 @@ class TestReportGenerator:
             },
         )
 
+        assert "report_type" in result
         assert result["report_type"] == "daily"
         assert result["student_name"] == "张三"
         assert result["risk_level"] == "green"
         assert "report_text" in result
         assert "张三" in result["report_text"]
-        assert "沐曦MetaX GPU" in result["generated_by"]
+        assert "心镜" in result["generated_by"]
 
     def test_generate_weekly_trend(self):
         """测试生成周度趋势分析"""

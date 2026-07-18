@@ -14,6 +14,7 @@ from backend.aigc.templates.report_templates import (
     WEEKLY_TREND_TEMPLATE,
     VISUALIZATION_TEMPLATE,
 )
+from backend.aigc.llm_client import llm_generate as _llm_generate
 
 logger = logging.getLogger(__name__)
 
@@ -45,45 +46,47 @@ class ReportGenerator:
         """
         data = emotion_data or {}
         analysis = analysis_result or {}
+        report_date = date or datetime.now().strftime("%Y-%m-%d")
+        name = student_name or "未知学生"
 
-        # 提取关键数据
         overall_score = analysis.get("overall_score", data.get("fused_score", 0.7))
+        risk_level = analysis.get("risk_level", "green")
+
+        # ---- 优先尝试 LLM 生成 ----
+        llm_text = self._try_llm_generate(name, report_date, data, analysis)
+        if llm_text:
+            return {
+                "report_type": "daily",
+                "student_name": student_name,
+                "date": report_date,
+                "risk_level": risk_level,
+                "overall_score": overall_score,
+                "report_text": llm_text,
+                "generated_by": "心镜·AIGC智能体 (moark.com Qwen3-8B)",
+            }
+
+        # ---- LLM 不可用，降级到模板模式 ----
         indicators = analysis.get("indicators", {})
         stability = indicators.get("emotional_stability_index", 0.7)
         positive_ratio = indicators.get("positive_emotion_ratio", 0.6)
         negative_ratio = indicators.get("negative_emotion_ratio", 0.2)
         trend = indicators.get("trend", "稳定")
-        risk_level = analysis.get("risk_level", "green")
 
-        # 评分状态判断
         score_status = self._get_score_status(overall_score)
         stability_status = self._get_stability_status(stability)
         positive_status = self._get_positive_status(positive_ratio)
         negative_status = self._get_negative_status(negative_ratio)
 
-        # 生成情绪概况
-        emotion_overview = self._generate_emotion_overview(
-            student_name, data, analysis
-        )
-
-        # 提取风险分析
-        risk_analysis = self._generate_risk_analysis(risk_level, analysis)
-
-        # 生成明日预测
+        emotion_overview = self._generate_emotion_overview(name, data, analysis)
+        risk_analysis_text = self._generate_risk_analysis(risk_level, analysis)
         lstm_result = analysis.get("lstm_transformer_analysis", {})
         prediction = lstm_result.get("prediction", {})
         next_day_prediction = self._generate_prediction(prediction)
-
-        # 生成建议
         suggestions = self._format_suggestions(analysis.get("suggestions", []))
-
-        # 关键发现
         key_findings = self._generate_key_findings(data, analysis)
 
-        # 格式化报告
-        report_date = date or datetime.now().strftime("%Y-%m-%d")
         report_text = DAILY_REPORT_TEMPLATE.format(
-            student_name=student_name or "未知学生",
+            student_name=name,
             date=report_date,
             overall_score=overall_score,
             score_status=score_status,
@@ -96,7 +99,7 @@ class ReportGenerator:
             trend=trend,
             emotion_overview=emotion_overview,
             key_findings=key_findings,
-            risk_analysis=risk_analysis,
+            risk_analysis=risk_analysis_text,
             next_day_prediction=next_day_prediction,
             suggestions=suggestions,
         )
@@ -108,8 +111,73 @@ class ReportGenerator:
             "risk_level": risk_level,
             "overall_score": overall_score,
             "report_text": report_text,
-            "generated_by": "心镜·AIGC智能体 (沐曦MetaX GPU)",
+            "generated_by": "心镜·AIGC智能体 (模板模式)",
         }
+
+    def _try_llm_generate(
+        self,
+        student_name: str,
+        date: str,
+        emotion_data: dict,
+        analysis: dict,
+    ) -> str | None:
+        """尝试使用 LLM 生成报告内容，失败返回 None。"""
+        indicators = analysis.get("indicators", {})
+        overall_score = analysis.get("overall_score", emotion_data.get("fused_score", 0.7))
+        risk_level = analysis.get("risk_level", "green")
+        emotion = emotion_data.get("fused_emotion", "未检测")
+        suggestions = analysis.get("suggestions", [])
+        risk_factors = analysis.get("risk_factors", [])
+        lstm_result = analysis.get("lstm_transformer_analysis", {})
+        prediction = lstm_result.get("prediction", {})
+
+        suggestion_str = "\n".join(
+            f"- {s.get('content', str(s))}" if isinstance(s, dict) else f"- {s}"
+            for s in suggestions[:5]
+        ) or "- 保持当前良好的情绪管理习惯"
+
+        risk_str = "\n".join(f"- {f}" for f in risk_factors) if risk_factors else "- 无明显风险因素"
+
+        system_prompt = (
+            "你是一位专业的学校心理辅导老师，负责撰写学生心理健康评估日报。"
+            "请使用专业的心理学语言，同时保持报告对教师和家长友好可读。"
+            "用 Markdown 格式输出结构化报告，适当使用 emoji 增强可读性。"
+        )
+
+        user_prompt = f"""请为 {student_name} 同学生成 {date} 的心理健康评估日报。
+
+## 数据概览
+- 综合情绪评分：{overall_score:.2f}/1.00
+- 主要情绪：{emotion}
+- 风险等级：{risk_level}
+- 情绪稳定性指数：{indicators.get('emotional_stability_index', 'N/A')}
+- 积极情绪占比：{indicators.get('positive_emotion_ratio', 'N/A')}
+- 负面情绪占比：{indicators.get('negative_emotion_ratio', 'N/A')}
+- 情绪趋势：{indicators.get('trend', '稳定')}
+- 压力累积指数：{indicators.get('stress_accumulation_index', 'N/A')}
+- 情绪恢复速度：{indicators.get('emotion_recovery_speed', 'N/A')}
+
+## 风险因素
+{risk_str}
+
+## 明日预测
+- 预测评分：{prediction.get('next_day_emotion', 'N/A')}
+- 趋势预测：{prediction.get('trend_prediction', '稳定')}
+
+## 已有建议参考
+{suggestion_str}
+
+请按以下结构输出完整报告：
+1. **情绪概况** — 1段自然语言概述
+2. **关键指标表格** — Markdown表格，含数值和状态评估
+3. **关键发现** — 2-3条要点
+4. **风险分析** — 根据风险等级具体分析
+5. **明日预测** — 简要预测说明
+6. **建议措施** — 3-5条可操作的具体建议
+
+请用中文撰写，语言专业、温暖、有建设性。"""
+
+        return _llm_generate(system_prompt, user_prompt)
 
     def generate_weekly_trend(
         self,

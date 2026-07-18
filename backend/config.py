@@ -24,11 +24,11 @@ class Settings(BaseSettings):
     # 主平台选择: lingshu / gitee_ai / deepseek / local / custom
     ai_platform: str = "gitee_ai"
 
-    # Lingshu-32B — 医疗大模型 (moark.com)
+    # Lingshu / Qwen3-8B — moark.com 平台（OpenAI 兼容）
     lingshu_api_key: str = ""
     lingshu_base_url: str = "https://api.moark.com/v1"
-    lingshu_model: str = "Lingshu-32B"
-    lingshu_top_k: int = -1
+    lingshu_model: str = "Qwen3-8B"
+    lingshu_top_k: int = 50
 
     # Gitee.AI (沐曦 MetaX GPU) - 国产开源GPU算力
     gitee_ai_api_key: str = ""

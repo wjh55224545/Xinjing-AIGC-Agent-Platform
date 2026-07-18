@@ -14,6 +14,7 @@ from backend.aigc.templates.letter_templates import (
     YELLOW_LETTER_TEMPLATE,
     RED_LETTER_TEMPLATE,
 )
+from backend.aigc.llm_client import llm_generate as _llm_generate
 
 logger = logging.getLogger(__name__)
 
@@ -53,21 +54,32 @@ class LetterGenerator:
         letter_date = datetime.now().strftime("%Y-%m-%d")
         teacher = teacher_name or "班主任"
         phone = teacher_phone or "请通过学校通讯录查询"
+        name = student_name or "同学"
 
-        # 根据风险等级选择模板
+        # ---- 优先尝试 LLM 生成 ----
+        llm_text = self._try_llm_generate(name, class_name, emotion_summary, risk_level, suggs, teacher, phone)
+        if llm_text:
+            return {
+                "letter_type": risk_level,
+                "student_name": student_name,
+                "class_name": class_name,
+                "risk_level": risk_level,
+                "letter_text": llm_text,
+                "generated_by": "心镜·AIGC智能体 (moark.com Qwen3-8B)",
+                "generated_at": letter_date,
+                "needs_review": risk_level in ("yellow", "red"),
+            }
+
+        # ---- LLM 不可用，降级到模板模式 ----
         if risk_level == "red":
             template = RED_LETTER_TEMPLATE
             actions = self._get_actions_taken()
             home_support = self._get_home_support_suggestions(suggs)
             follow_up = self._get_follow_up_plan()
             letter_text = template.format(
-                student_name=student_name,
-                emotion_summary=emotion_summary or "详见心理评估报告",
-                actions_taken=actions,
-                home_support_suggestions=home_support,
-                follow_up_plan=follow_up,
-                teacher_name=teacher,
-                teacher_phone=phone,
+                student_name=name, emotion_summary=emotion_summary or "详见心理评估报告",
+                actions_taken=actions, home_support_suggestions=home_support,
+                follow_up_plan=follow_up, teacher_name=teacher, teacher_phone=phone,
                 date=letter_date,
             )
         elif risk_level == "yellow":
@@ -75,21 +87,19 @@ class LetterGenerator:
             attention = self._get_attention_points(suggs)
             collab = self._get_collaboration_suggestions(suggs)
             letter_text = template.format(
-                student_name=student_name,
+                student_name=name,
                 emotion_summary=emotion_summary or "情绪状态总体稳定，有轻微波动",
-                attention_points=attention,
-                collaboration_suggestions=collab,
+                attention_points=attention, collaboration_suggestions=collab,
                 teacher_name=teacher,
             )
-        else:  # green
+        else:
             template = GREEN_LETTER_TEMPLATE
             positive = self._get_positive_findings()
             light = self._get_light_suggestions()
             letter_text = template.format(
-                student_name=student_name,
+                student_name=name,
                 emotion_summary=emotion_summary or "情绪状态良好，各项指标正常",
-                positive_findings=positive,
-                light_suggestions=light,
+                positive_findings=positive, light_suggestions=light,
                 teacher_name=teacher,
             )
 
@@ -99,10 +109,55 @@ class LetterGenerator:
             "class_name": class_name,
             "risk_level": risk_level,
             "letter_text": letter_text,
-            "generated_by": "心镜·AIGC智能体 (沐曦MetaX GPU)",
+            "generated_by": "心镜·AIGC智能体 (模板模式)",
             "generated_at": letter_date,
             "needs_review": risk_level in ("yellow", "red"),
         }
+
+    def _try_llm_generate(
+        self,
+        student_name: str,
+        class_name: str,
+        emotion_summary: str,
+        risk_level: str,
+        suggestions: list,
+        teacher_name: str,
+        teacher_phone: str,
+    ) -> str | None:
+        """尝试使用 LLM 生成家校沟通函，失败返回 None。"""
+        level_desc = {"green": "情绪状态良好，无需特别担心", "yellow": "情绪有轻微波动，需要适度关注", "red": "情绪状态需要紧急关注"}
+        desc = level_desc.get(risk_level, "")
+
+        suggestion_str = "\n".join(
+            f"- {s.get('content', str(s))}" if isinstance(s, dict) else f"- {s}"
+            for s in suggestions[:3]
+        ) or "- 保持规律作息和良好沟通"
+
+        system_prompt = (
+            "你是一位经验丰富的班主任老师，需要向家长发送学生心理状态沟通函。"
+            "语气必须温和、专业、不引起恐慌，同时传达必要的关注信息。"
+        )
+
+        user_prompt = f"""请为 {student_name}{class_name if class_name else ''}的家长撰写一封家校沟通函。
+
+## 关键信息
+- 情绪概况：{emotion_summary}
+- 风险等级：{risk_level}（{desc}）
+- 建议措施：{suggestion_str}
+- 老师署名：{teacher_name}
+- 联系方式：{teacher_phone}
+
+## 写作要求
+- 开头用温暖的问候语
+- 如实但不夸张地描述学生情绪状态
+- {"绿色等级：强调积极方面，给出轻声建议" if risk_level == "green" else ""}{"黄色等级：温和地表达关注，不要引起过度担忧" if risk_level == "yellow" else ""}{"红色等级：严肃但不慌张地说明情况，明确下一步安排" if risk_level == "red" else ""}
+- 给家长2-3条可操作的家庭支持建议
+- 结尾留老师联系方式，表达家校合作的诚意
+- 全文温暖、专业、不引起不必要的焦虑
+
+请用信函格式输出，以"尊敬的{student_name}家长："开头。"""
+
+        return _llm_generate(system_prompt, user_prompt, max_tokens=1024)
 
     def _get_positive_findings(self) -> str:
         """绿色等级 - 积极发现"""
