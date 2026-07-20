@@ -3,10 +3,12 @@
     <aside class="sidebar">
       <div class="logo">🧠 心镜 MindMirror</div>
       <nav>
-        <router-link to="/">仪表盘</router-link>
-        <router-link to="/emotions">情绪监测</router-link>
-        <router-link to="/alerts">预警面板</router-link>
-        <router-link to="/upload">视频上传</router-link>
+        <router-link to="/">📊 仪表盘</router-link>
+        <router-link to="/emotions">😊 情绪监测</router-link>
+        <router-link to="/alerts">🔔 预警面板</router-link>
+        <router-link to="/upload">📹 视频上传</router-link>
+        <router-link to="/aigc">✨ AIGC报告</router-link>
+        <router-link to="/agents">🤖 智能体面板</router-link>
       </nav>
     </aside>
 
@@ -33,6 +35,8 @@ const titles = {
   AlertPanel: "预警管理",
   StudentDetail: "学生详情",
   VideoUpload: "视频上传",
+  AigcReport: "AIGC内容生成",
+  AgentPanel: "多智能体协作",
 };
 const pageTitle = computed(() => titles[route.name] || "心镜");
 </script>

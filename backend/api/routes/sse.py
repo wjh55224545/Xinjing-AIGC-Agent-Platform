@@ -1,16 +1,22 @@
+"""
+SSE 流式推送路由
+
+统一 SSE 流式端点，复用 Agent 路由中的触发端点。
+"""
+
 from __future__ import annotations
 import json
-import uuid
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from backend.graph.orchestrator import get_orchestrator
 
-router = APIRouter(tags=["流式"])
+router = APIRouter(tags=["SSE流式"])
 
 
-@router.get("/agent/stream/{run_id}")
+@router.get("/sse/stream/{run_id}")
 async def stream_agent(run_id: str, request: Request):
+    """SSE 流式端点——订阅智能体协作事件流。触发操作请使用 /api/agents/trigger/*"""
     orchestrator = get_orchestrator()
     queue = orchestrator.get_queue(run_id)
 
@@ -30,44 +36,3 @@ async def stream_agent(run_id: str, request: Request):
 
     return StreamingResponse(generate(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
-
-@router.post("/agent/trigger/inner")
-async def trigger_inner():
-    from backend.database import SessionLocal
-    from backend.models.student import Student
-    db = SessionLocal()
-    try:
-        students = db.query(Student).all()
-    finally:
-        db.close()
-
-    run_id = str(uuid.uuid4())
-    orchestrator = get_orchestrator()
-    _ = orchestrator.get_queue(run_id)
-    import asyncio
-    for s in students:
-        asyncio.create_task(
-            orchestrator.run_inner_loop(
-                student_id=s.id, video_path="",
-                trigger_type="scheduled", run_id=run_id,
-            )
-        )
-
-    return {"success": True, "run_id": run_id, "message": f"已触发{len(students)}名学生的内环采集",
-            "records_created": 0}
-
-
-@router.post("/agent/trigger/outer")
-async def trigger_outer():
-    from datetime import date
-    run_id = str(uuid.uuid4())
-    orchestrator = get_orchestrator()
-    _ = orchestrator.get_queue(run_id)
-    import asyncio
-    asyncio.create_task(
-        orchestrator.run_outer_loop(target_date=str(date.today()), run_id=run_id)
-    )
-
-    return {"success": True, "run_id": run_id, "message": f"已触发{date.today()}外环分析",
-            "records_created": 0}

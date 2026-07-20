@@ -24,7 +24,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -177,8 +180,10 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS
+# ---- 中间件注册（注意：Starlette 按注册逆序执行） ----
 settings = get_settings()
+
+# 3. CORS（最外层）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -186,6 +191,37 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 2. 限流
+from backend.middleware.rate_limit import RateLimitMiddleware
+app.add_middleware(RateLimitMiddleware)
+
+# 1. API 日志（最内层，记录所有请求）
+from backend.middleware.logging import APILoggingMiddleware
+app.add_middleware(APILoggingMiddleware)
+
+# ---- 全局异常处理 ----
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"未处理异常: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": "服务器内部错误",
+            "detail": str(exc)[:200] if settings.ai_platform != "lingshu" else "内部错误",
+        },
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=422,
+        content={"success": False, "error": "请求参数验证失败", "detail": str(exc)},
+    )
 
 # 注册路由
 from backend.api.routes.upload import router as upload_router
@@ -196,6 +232,7 @@ from backend.api.routes.alerts import router as alerts_router
 from backend.api.routes.aigc import router as aigc_router
 from backend.api.routes.agents import router as agents_router
 from backend.api.routes.vibraimage import router as vibraimage_router
+from backend.api.routes.admin import router as admin_router
 
 app.include_router(upload_router, prefix="/api")
 app.include_router(sse_router, prefix="/api")
@@ -205,30 +242,36 @@ app.include_router(alerts_router, prefix="/api")
 app.include_router(aigc_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(vibraimage_router)
+app.include_router(admin_router, prefix="/api")
 
 
 @app.get("/api/health")
 def health():
     """健康检查 + 平台信息"""
     platform_info = "未知"
+    model_info = ""
     try:
         from backend.config import get_settings
         s = get_settings()
         platform_map = {
+            "lingshu": "moark.com Lingshu-32B (沐曦MetaX GPU)",
             "gitee_ai": "沐曦MetaX GPU / Gitee.AI",
             "deepseek": "DeepSeek",
             "local": "本地模型",
             "custom": "自定义平台",
         }
         platform_info = platform_map.get(s.ai_platform, s.ai_platform)
+        if s.ai_platform == "lingshu":
+            model_info = s.lingshu_model
     except Exception:
         pass
 
     return {
         "status": "ok",
         "service": "心镜·AIGC智能体平台",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "platform": platform_info,
+        "model": model_info,
         "competition": "第八届CCF开源创新大赛 - 任务三",
     }
 

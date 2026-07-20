@@ -2,7 +2,9 @@
 
 > 🏆 **第八届CCF开源创新大赛 · 国产开源GPU AI创新生态赛 任务三**
 >
-> 沐曦MetaX GPU国产算力 · 灵枢Lingshu-32B医疗大模型 · VibraImage前庭振动 · 多智能体AIGC协作
+> 沐曦MetaX GPU国产算力 · Lingshu-32B大模型 · VibraImage前庭振动 · 多智能体AIGC协作
+>
+> 📦 **阶段三**: 产品化部署 | 运营数据收集 | 开源至 GitLink | [部署指南](DEPLOY.md)
 
 [![Python](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
@@ -10,6 +12,8 @@
 [![GPU](https://img.shields.io/badge/GPU-沐曦MetaX-red.svg)](https://www.metax-tech.com/)
 [![LLM](https://img.shields.io/badge/LLM-Qwen3--8B%20(moark.com)-blue.svg)](https://api.moark.com/v1)
 [![VibraImage](https://img.shields.io/badge/引擎-VibraImage-purple.svg)]()
+[![Phase](https://img.shields.io/badge/阶段-三-green.svg)]()
+[![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
 
 ## 👥 团队信息
 
@@ -206,6 +210,16 @@ python -m pytest tests/ -v
 # ...
 # ==================== 56 passed in 2.34s ====================
 ```
+
+### 管理 API（阶段三新增）
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| `GET` | `/api/admin/stats` | 运营数据统计（API + LLM） |
+| `GET` | `/api/admin/stats/llm` | LLM 调用统计 |
+| `GET` | `/api/admin/stats/logs` | API 调用日志查询 |
+| `GET` | `/api/admin/health/detail` | 深度健康检查（DB + LLM + VibraImage） |
+| `GET` | `/api/admin/export` | 导出运营数据 CSV |
 
 ### 中文API文档
 

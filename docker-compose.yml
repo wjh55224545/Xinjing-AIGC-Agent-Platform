@@ -17,21 +17,22 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # AI算力平台配置
-      - AI_PLATFORM=${AI_PLATFORM:-gitee_ai}
-      - GITEE_AI_API_KEY=${GITEE_AI_API_KEY}
-      - GITEE_AI_BASE_URL=${GITEE_AI_BASE_URL:-https://api.gitee.ai/v1}
-      - GITEE_AI_MODEL=${GITEE_AI_MODEL:-qwen2.5-7b-instruct}
+      # AI 算力平台配置（主平台：Lingshu-32B）
+      - AI_PLATFORM=${AI_PLATFORM:-lingshu}
+      - LINGSHU_API_KEY=${LINGSHU_API_KEY}
+      - LINGSHU_BASE_URL=${LINGSHU_BASE_URL:-https://api.moark.com/v1}
+      - LINGSHU_MODEL=${LINGSHU_MODEL:-Lingshu-32B}
+      # 备用平台
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - AI_FALLBACK_PLATFORMS=${AI_FALLBACK_PLATFORMS:-deepseek}
-      # 华为云OBS
+      # 华为云OBS（可选）
       - OBS_AK=${OBS_AK}
       - OBS_SK=${OBS_SK}
       # 数据库
       - DATABASE_URL=sqlite:///./data/psych.db
     volumes:
       - ./data:/app/data
-      - ./config:/app/config
+      - ./logs:/app/logs
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
@@ -46,9 +47,8 @@ services:
       dockerfile: Dockerfile
     container_name: mindmirror-frontend
     ports:
-      - "5173:5173"
+      - "80:80"
     depends_on:
-      - backend
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000
+      backend:
+        condition: service_healthy
     restart: unless-stopped
