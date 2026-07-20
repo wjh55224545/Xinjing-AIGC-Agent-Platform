@@ -21,12 +21,14 @@
         <router-view />
       </div>
     </div>
+    <FeedbackWidget />
   </div>
 </template>
 
 <script setup>
 import { computed } from "vue";
 import { useRoute } from "vue-router";
+import FeedbackWidget from "./components/common/FeedbackWidget.vue";
 
 const route = useRoute();
 const titles = {
