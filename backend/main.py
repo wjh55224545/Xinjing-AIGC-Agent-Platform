@@ -203,6 +203,7 @@ app.add_middleware(APILoggingMiddleware)
 # ---- 全局异常处理 ----
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, RedirectResponse, HTMLResponse
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
@@ -276,11 +277,29 @@ def health():
     }
 
 
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
+STATIC_INDEX = os.path.join(STATIC_DIR, "index.html")
+HAS_FRONTEND = os.path.isfile(STATIC_INDEX)
+
+
 @app.get("/")
 def root():
-    """根路径重定向到API文档"""
-    from fastapi.responses import RedirectResponse
+    """根路径：有前端则服务前端，否则跳转 API 文档。"""
+    if HAS_FRONTEND:
+        return FileResponse(STATIC_INDEX)
     return RedirectResponse(url="/docs")
+
+
+if HAS_FRONTEND:
+    # CloudBase 部署模式：前端 SPA fallback
+    @app.get("/{path:path}")
+    async def spa_fallback(path: str = ""):
+        # API 路径由已注册的路由处理，此处不会被拦截（FastAPI 先匹配精确路径）
+        # 此处仅处理前端 SPA 路由回退
+        file_path = os.path.join(STATIC_DIR, path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(STATIC_INDEX)
 
 
 @app.get("/docs", include_in_schema=False)

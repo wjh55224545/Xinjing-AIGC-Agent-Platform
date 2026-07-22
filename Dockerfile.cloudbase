@@ -1,0 +1,42 @@
+# 心镜·AIGC智能体平台 - CloudBase 单容器部署
+# 多阶段构建: Node 前端构建 → Python 后端 + 静态文件
+
+# 阶段1: 构建前端
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci --registry=https://registry.npmmirror.com
+COPY frontend/ .
+RUN npm run build
+
+# 阶段2: 后端 + 前端静态文件
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 系统依赖（OpenCV 需要）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx libglib2.0-0 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python 依赖
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制后端代码
+COPY backend/ ./backend/
+COPY run_backend.py .
+
+# 复制前端构建产物到 static 目录（FastAPI mount）
+COPY --from=frontend-builder /app/frontend/dist ./static
+
+# 创建必要目录
+RUN mkdir -p /app/data/uploads /app/data/camera /app/data/obs /app/logs
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl -f http://localhost:8000/api/health || exit 1
+
+# 启动
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
