@@ -10,10 +10,17 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
 [![Vue](https://img.shields.io/badge/Vue-3.x-4FC08D.svg)](https://vuejs.org/)
 [![GPU](https://img.shields.io/badge/GPU-沐曦MetaX-red.svg)](https://www.metax-tech.com/)
-[![LLM](https://img.shields.io/badge/LLM-Qwen3--8B%20(moark.com)-blue.svg)](https://api.moark.com/v1)
+[![LLM](https://img.shields.io/badge/LLM-Lingshu--32B-blue.svg)](https://api.moark.com/v1)
 [![VibraImage](https://img.shields.io/badge/引擎-VibraImage-purple.svg)]()
 [![Phase](https://img.shields.io/badge/阶段-三-green.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
+
+## 🔗 开源地址
+
+| 平台 | 地址 |
+|------|------|
+| **GitHub** | [https://github.com/wjh55224545/Xinjing-AIGC-Agent-Platform](https://github.com/wjh55224545/Xinjing-AIGC-Agent-Platform) |
+| **GitLink** | [https://www.gitlink.org.cn/w55224545/Xinjing-AIGC-Agent-Platform](https://www.gitlink.org.cn/w55224545/Xinjing-AIGC-Agent-Platform) |
 
 ## 👥 团队信息
 
@@ -29,11 +36,11 @@
 
 ## 📖 项目简介
 
-**心镜**是一个部署在智慧教室环境中的AIGC智能体系统。平台以**沐曦MetaX GPU国产算力**为底座，搭载**moark.com 平台 Qwen3-8B 大模型**作为核心推理引擎，集成**VibraImage前庭振动识别引擎**（Viktor Minkin专著公式体系），通过**5智能体协作架构**，实现从双模态情绪感知到AIGC心理内容生成的全流程智能化。
+**心镜**是一个部署在智慧教室环境中的AIGC智能体系统。平台以**沐曦MetaX GPU国产算力**为底座，搭载**moark.com 平台 Lingshu-32B 大模型**作为核心推理引擎，集成**VibraImage前庭振动识别引擎**（Viktor Minkin专著公式体系），通过**5智能体协作架构**，实现从双模态情绪感知到AIGC心理内容生成的全流程智能化。
 
 ### 一句话理解
 
-**教室里的"情绪CT机" + "AI心理报告生成器"——沐曦GPU驱动，moark.com Qwen3-8B大模型推理，VibraImage振动分析，多Agent协作，全流程AIGC。**
+**教室里的"情绪CT机" + "AI心理报告生成器"——沐曦GPU驱动，moark.com Lingshu-32B大模型推理，VibraImage振动分析，多Agent协作，全流程AIGC。**
 
 ---
 
@@ -41,9 +48,9 @@
 
 | 赛道要求 | 本项目实现 |
 |---------|-----------|
-| 基于国产算力平台 | ✅ 沐曦MetaX GPU + moark.com Qwen3-8B 大模型，全链路国产化 |
-| AIGC能力 | ✅ Qwen3-8B 大模型驱动：心理报告、干预方案、家校沟通函、成长叙事（LLM直接生成，不可用时自动降级模板） |
-| 多Agent协作 | ✅ 5智能体（感知→分析→报告→预警→协调），Qwen3-8B ReAct推理 |
+| 基于国产算力平台 | ✅ 沐曦MetaX GPU + moark.com Lingshu-32B 大模型，全链路国产化 |
+| AIGC能力 | ✅ Lingshu-32B 大模型驱动：心理报告、干预方案、家校沟通函、成长叙事（LLM直接生成，不可用时自动降级模板） |
+| 多Agent协作 | ✅ 5智能体（感知→分析→报告→预警→协调），Lingshu-32B ReAct推理 |
 | 产品化落地 | ✅ Web前后端 + Docker + API文档 + 56项测试全通过 |
 | 开源合规 | ✅ Apache 2.0 License，完整文档 |
 
@@ -51,50 +58,15 @@
 
 ## 🏗️ 系统架构
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                  前端 (Vue 3 + Vite + ECharts)               │
-│  仪表盘 │ 情绪监测 │ AIGC报告 │ 预警面板 │ 智能体状态       │
-└──────────────────────┬───────────────────────────────────────┘
-                       │ HTTP REST + SSE 流式
-┌──────────────────────▼───────────────────────────────────────┐
-│               后端 (FastAPI + LangGraph)                      │
-│                                                               │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │         多智能体协作系统 (5 Agents · 灵枢驱动)       │    │
-│  │                                                      │    │
-│  │  👁️ 感知智能体 ──→ 🧠 分析智能体                     │    │
-│  │  双模态识别(面部+前庭)   12项指标+LSTM-Transformer    │    │
-│  │       │                        │                     │    │
-│  │       └────────┬───────────────┘                     │    │
-│  │                ↓                                     │    │
-│  │  ✨ AIGC报告智能体 ←──────→ 🔔 预警智能体            │    │
-│  │  心理报告/方案/沟通函/叙事   三级预警+7渠道反馈       │    │
-│  │                ↑________________↑                    │    │
-│  │                    🎯 协调智能体                      │    │
-│  └──────────────────────────────────────────────────────┘    │
-│                                                               │
-│  ┌───────────┐ ┌───────────┐ ┌──────────┐ ┌──────────┐     │
-│  │ 情绪识别   │ │ VibraImage│ │ AIGC引擎 │ │ 反馈工具  │     │
-│  │ (面部+前庭)│ │ 振动引擎 ★│ │ 4生成器  │ │ 7渠道    │     │
-│  └───────────┘ └───────────┘ └──────────┘ └──────────┘     │
-└──────────────────────┬───────────────────────────────────────┘
-                       │ OpenAI 兼容 API
-┌──────────────────────▼───────────────────────────────────────┐
-│               国产AI算力平台                                  │
-│  ┌──────────────────────┐ ┌──────────────┐ ┌──────────────┐ │
-│  │ 灵枢 / Qwen3-8B      │ │ DeepSeek     │ │ 本地/自定义   │ │
-│  │ ★ 主平台 · moark.com  │ │ ☆ 备用       │ │              │ │
-│  │ OpenAI兼容·流式推理   │ │ 国产大模型    │ │              │ │
-│  └──────────────────────┘ └──────────────┘ └──────────────┘ │
-└──────────────────────────────────────────────────────────────┘
-```
+![系统架构图](系统架构图.jpg)
+
+**图1  心镜平台三层系统架构图**
 
 ---
 
 ## ✨ 核心特性
 
-### 🧠 moark.com Qwen3-8B 大模型 ★
+### 🧠 moark.com Lingshu-32B 大模型 ★
 - 通过 moark.com 平台 OpenAI 兼容 API 调用，支持流式推理和 reasoning
 - 5个智能体的ReAct推理全部由该模型驱动
 - 支持 `ExtraBodyChatOpenAI` 适配非标准API参数（如 `top_k`、`frequency_penalty`）
@@ -248,69 +220,74 @@ alerts — 预警记录表
 
 ## 🚀 快速启动
 
-### 1. 环境准备
+### 方式一：本地开发
 
 ```bash
-cd 心镜AIGC智能体平台
+# 1. 克隆仓库
+git clone https://github.com/wjh55224545/Xinjing-AIGC-Agent-Platform.git
+cd Xinjing-AIGC-Agent-Platform
+
+# 2. 虚拟环境
 python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # macOS/Linux
+# Windows: .venv\Scripts\activate
+# Linux/macOS: source .venv/bin/activate
+
+# 3. 安装依赖
 pip install -r requirements.txt
-```
 
-### 2. 配置灵枢 Lingshu-32B
-
-```bash
+# 4. 配置环境（必须）
 cp .env.template .env
+# 编辑 .env，填入 API Key：
+#   LINGSHU_API_KEY=你的密钥
+#   可选填则AIGC自动降级模板模式
+
+# 5. 启动后端（开发模式，含热重载）
+python run_backend.py --dev
+
+# 6. 启动前端（可选）
+cd frontend && npm install && npm run dev
 ```
 
-编辑 `.env`，填入灵枢配置：
+### 方式二：Docker 部署
 
 ```bash
-AI_PLATFORM=lingshu
-LINGSHU_API_KEY=你的moark平台API密钥
-LINGSHU_BASE_URL=https://api.moark.com/v1
-LINGSHU_MODEL=Qwen3-8B
+# 单容器（推荐，含前后端）
+docker build -t mindmirror .
+docker run -d -p 8000:8000 \
+  -e LINGSHU_API_KEY=你的密钥 \
+  mindmirror
 
-# 备用平台（灵枢不可用时自动切换）
-AI_FALLBACK_PLATFORMS=deepseek
-DEEPSEEK_API_KEY=你的DeepSeek密钥
-```
-
-> 🛡️ `.env` 已在 `.gitignore` 中，不会被提交到 Git。
-
-### 3. 启动后端
-
-```bash
-python run_backend.py
-```
-
-浏览器访问：
-- 🇨🇳 **中文 API 文档**：http://localhost:8000/docs
-- ✅ 健康检查：http://localhost:8000/api/health
-- 🔬 VibraImage引擎状态：http://localhost:8000/api/vibraimage/health
-
-### 4. 启动前端（需 Node.js 18+）
-
-```bash
-cd frontend
-npm install
-npm run dev
-# 访问 http://localhost:5173
-```
-
-### 5. Docker 一键部署
-
-```bash
+# 或 docker-compose
 docker-compose up -d
-# 后端: http://localhost:8000  前端: http://localhost:5173
 ```
 
-### 6. 运行测试
+### 方式三：云平台（CloudBase / Railway / Render）
+
+1. Fork 本仓库
+2. 在云平台选择「Dockerfile 部署」
+3. 容器端口填 `8000`
+4. 环境变量填：
+```json
+{"LINGSHU_API_KEY":"你的密钥","LINGSHU_BASE_URL":"https://api.moark.com/v1","LINGSHU_MODEL":"Lingshu-32B","AI_PLATFORM":"lingshu"}
+```
+5. 部署完成后访问公网地址即可
+
+> 📖 详细部署指南请查看 [DEPLOY.md](DEPLOY.md)
+
+### 访问地址
+
+| 地址 | 说明 |
+|------|------|
+| `http://localhost:8000` | 前端页面（仪表盘） |
+| `http://localhost:8000/docs` | 中文 Swagger API 文档 |
+| `http://localhost:8000/api/health` | 健康检查 |
+| `http://localhost:8000/api/admin/stats` | 运营数据 |
+
+### 运行测试
 
 ```bash
 python -m pytest tests/ -v
-# 预期: 56项测试全部通过
+# 预期: 56 passed in ~200s
 ```
 
 ---
@@ -324,10 +301,10 @@ python -m pytest tests/ -v
 | 学生 | `GET /api/students` | 学生列表 |
 | 预警 | `GET /api/alerts` | 预警列表 |
 | 上传 | `POST /api/upload/video` | 上传视频触发采集 |
-| **AIGC** | `POST /api/aigc/report/daily` | **Qwen3-8B 生成心理评估日报** |
-| **AIGC** | `POST /api/aigc/plan/intervention` | **Qwen3-8B 生成干预方案** |
-| **AIGC** | `POST /api/aigc/letter/parent` | **Qwen3-8B 生成家校沟通函** |
-| **AIGC** | `POST /api/aigc/narrative/growth` | **Qwen3-8B 生成成长叙事** |
+| **AIGC** | `POST /api/aigc/report/daily` | **Lingshu-32B 生成心理评估日报** |
+| **AIGC** | `POST /api/aigc/plan/intervention` | **Lingshu-32B 生成干预方案** |
+| **AIGC** | `POST /api/aigc/letter/parent` | **Lingshu-32B 生成家校沟通函** |
+| **AIGC** | `POST /api/aigc/narrative/growth` | **Lingshu-32B 生成成长叙事** |
 | 智能体 | `GET /api/agents/info` | 多智能体系统信息 |
 | 智能体 | `GET /api/agents/platform` | 国产算力平台信息 |
 | 智能体 | `POST /api/agents/trigger/inner` | 触发情绪采集 |
@@ -353,7 +330,7 @@ python -m pytest tests/ -v
 
 ```bash
 # 编辑 .env 文件切换AI平台
-AI_PLATFORM=lingshu     # 使用 moark.com Qwen3-8B (推荐)
+AI_PLATFORM=lingshu     # 使用 moark.com Lingshu-32B (推荐)
 AI_PLATFORM=gitee_ai    # 使用 Gitee.AI 平台
 AI_PLATFORM=deepseek    # 使用 DeepSeek (备用)
 ```
@@ -481,7 +458,7 @@ curl http://localhost:8000/api/agents/platform
 
 | 层级 | 技术 | 说明 |
 |------|------|------|
-| **主推理引擎** | **moark.com Qwen3-8B** | **沐曦GPU · OpenAI兼容API ★** |
+| **主推理引擎** | **moark.com Lingshu-32B** | **沐曦GPU · OpenAI兼容API ★** |
 | 备用推理 | DeepSeek | 自动Fallback |
 | 前庭振动 | VibraImage + YOLOv8n | Minkin专著公式体系 ★ |
 | 后端 | FastAPI + LangGraph | 异步Web + AI编排 |
@@ -496,4 +473,6 @@ curl http://localhost:8000/api/agents/platform
 >
 > **任务**: 任务三 - 基于国产算力平台的AIGC与智能体开发与应用
 >
-> **算力支持**: 沐曦MetaX GPU + moark.com Qwen3-8B 大模型
+> **算力支持**: 沐曦MetaX GPU + moark.com Lingshu-32B 大模型
+>
+> **开源地址**: [GitHub](https://github.com/wjh55224545/Xinjing-AIGC-Agent-Platform) | [GitLink](https://www.gitlink.org.cn/w55224545/Xinjing-AIGC-Agent-Platform)
