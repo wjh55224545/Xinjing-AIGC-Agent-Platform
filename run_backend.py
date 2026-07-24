@@ -30,7 +30,8 @@ if __name__ == "__main__":
     print("=" * 60)
     print("  心镜·AIGC智能体平台 v2.1.0")
     print("  第八届CCF开源创新大赛 · 任务三")
-    print(f"  模式: {'🔧 生产' if PRODUCTION else '🛠️  开发'}")
+    mode_str = "Production" if PRODUCTION else "Development"
+    print(f"  模式: {mode_str}")
     print("  算力平台: moark.com Lingshu-32B (沐曦MetaX GPU)")
     print("=" * 60)
 
