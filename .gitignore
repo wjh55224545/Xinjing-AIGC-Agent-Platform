@@ -46,6 +46,9 @@ desktop.ini
 # 运行日志
 logs/
 
+# 外部项目副本
+Xinjing-AIGC-Agent-Platform-main/
+
 # Node
 frontend/node_modules/
 frontend/dist/

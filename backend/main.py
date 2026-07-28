@@ -174,7 +174,7 @@ app = FastAPI(
         "- 📊 实时情绪监测与深度心理健康分析\n"
         "- 🔔 三级预警与多渠道反馈"
     ),
-    version="2.0.0",
+    version="2.2.0",
     lifespan=lifespan,
     docs_url=None,   # 禁用默认英文 Swagger，改用下方自定义中文页面
     redoc_url="/redoc",

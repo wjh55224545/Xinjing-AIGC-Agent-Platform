@@ -1,0 +1,108 @@
+# E1-E12 → 效价(Valence) / 唤醒度(Arousal) 权重矩阵
+# 基于VCE专著中各参数的心理学语义设定（初始猜测值）
+# 通过 calibrate.py 可用标注数据校正（Pearson r）
+#
+# 效价: 正性=[0,1], 越高越积极
+# 唤醒度: 激活程度=[0,1], 越高越兴奋/紧张
+
+weights:
+  valence:
+    aggression:      -0.8
+    stress:          -0.7
+    tension:         -0.7
+    suspicious:      -0.6
+    balance:          0.6
+    charm:            0.5
+    energy:           0.3
+    self_regulation:  0.6
+    inhibition:      -0.3
+    neuroticism:     -0.5
+    depression:      -0.7
+    happiness:        0.9
+
+  arousal:
+    aggression:       0.7
+    stress:           0.8
+    tension:          0.7
+    suspicious:       0.4
+    balance:         -0.3
+    charm:            0.2
+    energy:           0.8
+    self_regulation: -0.5
+    inhibition:      -0.4
+    neuroticism:      0.5
+    depression:      -0.6
+    happiness:        0.2
+
+# E1-E12 参数值归一化参考范围 [min, max]
+# 基于 NORMAL_NORMS ± 3*NORMAL_SDS (VCE Table 6-18)
+normalization:
+  aggression:      [18.0, 63.0]
+  stress:          [9.0, 54.0]
+  tension:         [5.0, 56.0]
+  suspicious:      [9.0, 47.0]
+  balance:         [30.0, 93.0]
+  charm:           [17.0, 96.0]
+  energy:          [2.0, 90.0]
+  self_regulation: [12.0, 98.0]
+  inhibition:      [0.0, 59.0]
+  neuroticism:     [0.0, 70.0]
+  depression:      [7.0, 55.0]
+  happiness:       [21.0, 79.0]
+
+# 10类情绪在效价-唤醒度二维空间中的定义区域
+emotion_regions:
+  calm_relaxed:        # ① 平静/放松 — center (~0.72, ~0.24)
+    valence:    [0.48, 0.96]
+    arousal:    [0.06, 0.42]
+    label:      "平静/放松"
+    label_en:   "calm_relaxed"
+  angry_irritable:     # ② 愤怒/烦躁 — center (~0.12, ~0.88)
+    valence:    [0.00, 0.24]
+    arousal:    [0.78, 0.98]
+    label:      "愤怒/烦躁"
+    label_en:   "angry_irritable"
+  anxious_worried:     # ③ 焦虑/担忧 — center (~0.22, ~0.70)
+    valence:    [0.00, 0.44]
+    arousal:    [0.56, 0.84]
+    label:      "焦虑/担忧"
+    label_en:   "anxious_worried"
+  nervous_uneasy:      # ④ 紧张/不安 — center (~0.25, ~0.52)
+    valence:    [0.02, 0.48]
+    arousal:    [0.38, 0.66]
+    label:      "紧张/不安"
+    label_en:   "nervous_uneasy"
+  sad_low:             # ⑤ 低落/悲伤 — center (~0.18, ~0.38)
+    valence:    [0.00, 0.36]
+    arousal:    [0.32, 0.44]
+    label:      "低落/悲伤"
+    label_en:   "sad_low"
+  fatigued_exhausted:  # ⑥ 疲惫/倦怠 — center (~0.20, ~0.18)
+    valence:    [0.00, 0.40]
+    arousal:    [0.00, 0.36]
+    label:      "疲惫/倦怠"
+    label_en:   "fatigued_exhausted"
+  focused_engaged:     # ⑦ 专注/投入 — center (~0.72, ~0.42)
+    valence:    [0.52, 0.92]
+    arousal:    [0.34, 0.50]
+    label:      "专注/投入"
+    label_en:   "focused_engaged"
+  happy_cheerful:      # ⑧ 愉悦/开心 — center (~0.80, ~0.54)
+    valence:    [0.60, 1.00]
+    arousal:    [0.42, 0.66]
+    label:      "愉悦/开心"
+    label_en:   "happy_cheerful"
+  excited_elated:      # ⑨ 兴奋/激动 — center (~0.80, ~0.80)
+    valence:    [0.60, 1.00]
+    arousal:    [0.68, 0.92]
+    label:      "兴奋/激动"
+    label_en:   "excited_elated"
+  content_serene:      # ⑩ 满足/安详 — center (~0.80, ~0.18)
+    valence:    [0.62, 0.98]
+    arousal:    [0.00, 0.36]
+    label:      "满足/安详"
+    label_en:   "content_serene"
+
+# 无法归入任何区域时的默认标签
+default_emotion: "中性"
+default_emotion_en: "neutral"

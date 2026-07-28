@@ -320,13 +320,20 @@ class VibraImageEngine:
         return np.array(frames), actual_fps
 
     def _process_windows(self, frames: np.ndarray) -> List[WindowResult]:
-        """滑动窗口处理。"""
+        """滑动窗口处理。帧数不足时自动收缩窗口。"""
         results = []
         n_frames = len(frames)
-        window_id = 0
 
-        for start in range(0, n_frames - self.window_frames + 1, self.window_stride):
-            end = start + self.window_frames
+        if n_frames < 3:
+            return results
+
+        # 帧数不足 → 用全部帧作为一个窗口
+        effective_window = min(self.window_frames, n_frames)
+        effective_stride = self.window_stride if n_frames >= self.window_frames else effective_window
+
+        window_id = 0
+        for start in range(0, n_frames - effective_window + 1, effective_stride):
+            end = start + effective_window
             window_frames = frames[start:end]
 
             try:

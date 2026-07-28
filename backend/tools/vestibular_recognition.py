@@ -114,6 +114,7 @@ class VestibularRecognitionTool(BaseTool):
     def __init__(self):
         super().__init__()
         self._engine = None
+        self._mapper = None
 
     def _get_engine(self):
         """延迟初始化VibraImage引擎（避免导入时的模型加载开销）。"""
@@ -121,6 +122,7 @@ class VestibularRecognitionTool(BaseTool):
             try:
                 from backend.vibraimage.pipeline.engine import VibraImageEngine
                 from backend.vibraimage.pipeline.face_detector import FaceDetector
+                from backend.vibraimage.mapping.emotion_mapper import EmotionMapper
 
                 settings = get_settings()
 
@@ -141,10 +143,14 @@ class VestibularRecognitionTool(BaseTool):
                     freq_method=settings.vibraimage_freq_method,
                     face_detector=face_detector,
                 )
-                logger.info("VibraImage引擎初始化成功")
+
+                self._mapper = EmotionMapper()
+
+                logger.info("VibraImage引擎 v0.2.0 初始化成功（含L2映射层）")
             except Exception as e:
                 logger.error(f"VibraImage引擎初始化失败: {e}")
                 self._engine = None
+                self._mapper = None
         return self._engine
 
     def execute(self, video_path: str = "", **kwargs) -> ToolResult:
@@ -190,10 +196,18 @@ class VestibularRecognitionTool(BaseTool):
 
             processing_time_ms = int((time.time() - start_time) * 1000)
 
-            # 将E1-E12映射到效价-唤醒度空间
-            valence = self._compute_valence(emotions)
-            arousal = self._compute_arousal(emotions)
-            intensity = self._compute_intensity(emotions)
+            # 将E1-E12映射到效价-唤醒度空间（v0.2: 使用L2映射层）
+            if self._mapper is not None:
+                mapped = self._mapper.map(emotions, K=session.K_value)
+                # mapper输出[0,1] → 转换为[-1,1]保持上游融合兼容
+                valence = mapped.valence * 2.0 - 1.0
+                arousal = mapped.arousal * 2.0 - 1.0
+                intensity = mapped.intensity
+            else:
+                # fallback: 旧版 ad-hoc 计算
+                valence = self._compute_valence(emotions)
+                arousal = self._compute_arousal(emotions)
+                intensity = self._compute_intensity(emotions)
             confidence = self._compute_confidence(session)
 
             result = VibraImageVestibularResult(

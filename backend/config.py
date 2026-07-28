@@ -76,7 +76,7 @@ class Settings(BaseSettings):
 
     # ========== 服务 ==========
     service_name: str = "心镜·AIGC智能体平台"
-    service_version: str = "2.0.0"
+    service_version: str = "2.2.0"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
