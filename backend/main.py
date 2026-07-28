@@ -154,7 +154,25 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
+    # 打印 GPU 信息
+    try:
+        from backend.aigc.llm_client import _get_openai_client, get_gpu_vendor
+        # 尝试一次简单调用以获取 GPU header（异步不阻塞启动）
+        import threading
+        def _probe_gpu():
+            from backend.aigc.llm_client import llm_generate
+            llm_generate("你是测试助手。", "回复: ping", max_tokens=8)
+        t = threading.Thread(target=_probe_gpu, daemon=True)
+        t.start()
+        logger.info(
+            "GPU 探测已启动（后台），首次 LLM 调用将捕获 moark.com 响应头中的 "
+            "GPU 厂商信息（x-vendor: metax → 沐曦 MetaX GPU）"
+        )
+    except Exception:
+        pass
+
     logger.info(f"心镜·AIGC智能体平台 v{settings.service_version} 已启动")
+    logger.info(f"Lingshu-32B running on moark.com (沐曦 MetaX GPU)")
     logger.info(f"API文档: http://localhost:8000/docs")
 
     yield

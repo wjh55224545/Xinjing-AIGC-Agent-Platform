@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 # LLM 并发控制（最多 3 个并发请求，保护 moark.com 不被限流）
 _llm_lock = threading.Semaphore(3)
 
+# 缓存 moark.com 返回头中的 GPU 厂商信息（首次调用后填充）
+GPU_VENDOR_CACHED: str = ""
+
 LLM_LOG_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "logs")
 os.makedirs(LLM_LOG_DIR, exist_ok=True)
 LLM_LOG_PATH = os.path.join(LLM_LOG_DIR, "llm_calls.jsonl")
@@ -31,13 +34,17 @@ LLM_LOG_PATH = os.path.join(LLM_LOG_DIR, "llm_calls.jsonl")
 def _log_llm_call(
     success: bool, model: str, duration_ms: float,
     prompt_tokens: int = 0, completion_tokens: int = 0,
-    error: str = "",
+    error: str = "", gpu: str = "",
 ) -> None:
     """记录 LLM 调用到 JSONL 日志文件。"""
+    global GPU_VENDOR_CACHED
+    if gpu and not GPU_VENDOR_CACHED:
+        GPU_VENDOR_CACHED = gpu
     try:
         entry = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "model": model,
+            "gpu": gpu or GPU_VENDOR_CACHED or None,
             "success": success,
             "duration_ms": round(duration_ms, 1),
             "prompt_tokens": prompt_tokens,
@@ -49,6 +56,11 @@ def _log_llm_call(
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception:
         pass
+
+
+def get_gpu_vendor() -> str:
+    """返回缓存的 GPU 厂商信息（首次 LLM 调用后可用）。"""
+    return GPU_VENDOR_CACHED
 
 
 @lru_cache(maxsize=1)
@@ -100,7 +112,8 @@ def llm_generate(
         logger.warning("LLM 并发已满，请求被跳过")
         return None
     try:
-        response = client.chat.completions.create(
+        # 使用 with_raw_response 捕获 HTTP 响应头（含 GPU 厂商信息）
+        raw_resp = client.chat.completions.with_raw_response.create(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -113,6 +126,12 @@ def llm_generate(
             frequency_penalty=0.0,
         )
         duration_ms = (time.time() - t_start) * 1000
+
+        # 提取 GPU 厂商信息（moark.com 返回 x-vendor: metax）
+        gpu_vendor = raw_resp.headers.get("x-vendor", "")
+        compute_time = raw_resp.headers.get("x-compute-time", "")
+        response = raw_resp.parse()
+
         content = response.choices[0].message.content
         usage = response.usage
         pt = usage.prompt_tokens if usage else 0
@@ -122,11 +141,18 @@ def llm_generate(
             import re
             content = re.sub(r'<\s*think\s*>.*?<\s*/\s*think\s*>', '', content, flags=re.DOTALL)
             content = content.strip()
-            _log_llm_call(True, settings.lingshu_model, duration_ms, pt, ct)
-            logger.info(f"LLM 生成成功，模型={response.model}，长度={len(content)} 字符，耗时={duration_ms:.0f}ms")
+            meta = f"GPU={gpu_vendor}" if gpu_vendor else ""
+            if compute_time:
+                meta += f" compute={compute_time}s"
+            _log_llm_call(True, settings.lingshu_model, duration_ms, pt, ct, gpu=gpu_vendor)
+            logger.info(
+                f"LLM 生成成功，模型={response.model}，"
+                f"长度={len(content)} 字符，耗时={duration_ms:.0f}ms"
+                + (f"，{meta}" if meta else "")
+            )
             return content
         else:
-            _log_llm_call(False, settings.lingshu_model, duration_ms, pt, ct, "空内容")
+            _log_llm_call(False, settings.lingshu_model, duration_ms, pt, ct, "空内容", gpu=gpu_vendor)
             logger.warning("LLM 返回空内容")
             return None
     except Exception as e:
