@@ -80,7 +80,7 @@
 - 10,266人常模数据库，K值心理状态量化指标
 
 ### 👁️ 双模态情绪识别
-- **面部微表情**：调用外部API分析面部肌肉运动单元
+- **面部图像分析**：OpenCV Haar Cascade 人脸检测 + 面部区域像素特征提取（嘴部曲率/眼部开度/眉毛位置/对称性）
 - **前庭振动**：VibraImage引擎分析头部微振动频率和空间分布
 - 加权融合策略（面部0.6 + 前庭0.4），置信度差异>35%自动复核
 
@@ -466,6 +466,147 @@ curl http://localhost:8000/api/agents/platform
 | 数据库 | SQLite + SQLAlchemy | 轻量级ORM |
 | 部署 | Docker + docker-compose | 一键部署 |
 | 通信 | SSE (Server-Sent Events) | 实时流式推送 |
+
+---
+
+## 🖥️ 使用的模型与算力环境
+
+| 项目 | 详情 |
+|------|------|
+| **主推理模型** | Lingshu-32B（灵枢32B医疗大模型） |
+| **API 端点** | `https://api.moark.com/v1`（OpenAI 兼容协议） |
+| **调用方式** | `ExtraBodyChatOpenAI` 子类适配，参数：`top_k=-1, top_p=1.0, frequency_penalty=0.0` |
+| **GPU 算力** | 沐曦 MetaX GPU（moark.com 平台托管推理） |
+| **国产化** | 全链路国产：沐曦GPU → moark.com → Lingshu-32B |
+| **备用方案** | DeepSeek（自动 Fallback） |
+| **本地模型** | YOLOv8n 人脸检测（ultralytics）、Haar Cascade 后备 |
+| **推理框架** | LangChain 0.3.13 + LangGraph 0.2.60 |
+| **平均延迟** | 2.35s（5次实测取平均，prompt="ping" / max_tokens=32） |
+| **成功率** | 100%（5/5 实测） |
+
+---
+
+## 📝 示例输入输出
+
+### 心理评估日报（AIGC）
+
+**输入**（`POST /api/aigc/report/daily`）：
+
+```json
+{
+  "student_name": "张三",
+  "date": "2026-07-18",
+  "emotion_data": {"fused_emotion": "开心", "fused_score": 0.85},
+  "analysis_result": {
+    "overall_score": 0.82,
+    "risk_level": "green",
+    "indicators": {
+      "emotional_stability_index": 0.78,
+      "positive_emotion_ratio": 0.65,
+      "negative_emotion_ratio": 0.15,
+      "trend": "稳定"
+    }
+  }
+}
+```
+
+**输出**（Lingshu-32B 实时生成，Markdown 格式）：
+
+```markdown
+# 张三同学 2026-07-18 心理健康评估日报 🌿✨
+
+## 1. 情绪概况
+今日张三同学表现出显著的积极心理状态（综合评分 0.82/1.0），
+以"开心"为主要情感体验，积极情感占比达 65%，负面情感仅占 15%。
+
+## 2. 关键指标表格
+| 指标名称       | 数值  | 状态评估 |
+|----------------|-------|----------|
+| 综合情绪评分   | 0.82  | 良好     |
+| 情绪稳定性指数 | 0.78  | 稳定     |
+| 积极情绪占比   | 65%   | 良好     |
+| 负面情绪占比   | 15%   | 低       |
+
+## 3. 关键发现
+- 情绪状态稳定，无异常波动
+- 积极情绪占主导，心理状态健康
+
+## 4. 风险分析
+绿色等级，未检测到明显风险因素。
+
+## 5. 建议措施
+- 继续保持良好的情绪管理习惯
+- 鼓励参与集体活动，增强社交互动
+```
+
+### 视频上传 → 情绪识别
+
+**输入**：`POST /api/upload/video` 上传 MP4 视频文件
+
+**输出**：
+```json
+{
+  "success": true,
+  "run_id": "abc123-def456",
+  "student_id": 1,
+  "trigger_type": "manual"
+}
+// SSE 事件流: thought → action → observation → final
+// 最终结果: fused_emotion="开心", fused_score=0.85, faces_detected=10/10
+```
+
+---
+
+## 📚 参考来源说明
+
+| 参考内容 | 来源 |
+|------|------|
+| **VibraImage 前庭振动公式体系（E1-E12 + K值）** | Viktor Minkin, "Vibraimage, Cybernetics and Emotions" (2020). Elsys Corp. ISBN 978-5-6042117-2-4 |
+| **VCE 情绪参数常模数据（10,266人）** | 同上专著，Table 6-18，NORMAL_NORMS / NORMAL_SDS 参数集 |
+| **YOLOv8 目标检测** | Ultralytics YOLOv8（https://github.com/ultralytics/ultralytics），AGPL-3.0 许可证 |
+| **LangChain / LangGraph** | https://github.com/langchain-ai/langchain，MIT 许可证 |
+| **FastAPI 框架** | https://github.com/fastapi/fastapi，MIT 许可证 |
+| **Vue 3 前端框架** | https://github.com/vuejs/core，MIT 许可证 |
+| **ECharts 可视化** | https://github.com/apache/echarts，Apache 2.0 许可证 |
+| **灵枢 Lingshu-32B 大模型** | moark.com 平台（沐曦 MetaX GPU 推理），API 接口参考 Gitee.AI 开放平台文档 |
+| **Haar Cascade 级联分类器** | OpenCV (opencv.org)，Apache 2.0 许可证 |
+
+---
+
+## 📋 开发过程记录
+
+### 功能设计与开发计划
+
+1. **阶段一（基础架构）**：搭建 FastAPI + LangGraph 双环状态机 → 5 智能体 ReAct 协作 → 前端仪表盘 → Docker 部署，完成 56 项自动化测试
+2. **阶段二（AIGC 集成）**：接入 moark.com Lingshu-32B 真实 LLM → AIGC 生成器 LLM 优先 + 模板降级双轨 → prompt-based ReAct Agent（灵枢不支持 function calling）
+3. **阶段三（产品化交付）**：API 日志 + 限流中间件 + 管理 API → CloudBase 云部署适配 → 用户反馈收集 → 文档完善
+
+### 模型接口调用问题与解决
+
+| 问题 | 解决方案 |
+|------|---------|
+| **Lingshu-32B 不支持 OpenAI function calling** | 工具调用改为 prompt-based ReAct 循环：系统提示词描述工具 → LLM 以 `<tool_call>JSON</tool_call>` 请求 → Python 侧解析执行 → 结果回传继续推理。`ExtraBodyChatOpenAI._get_request_payload()` 过滤 `tool_choice` 参数 |
+| **moark.com 非标准参数 `top_k`** | `ExtraBodyChatOpenAI` 子类重写 `_get_request_payload` 注入 `extra_body={"top_k": -1}` |
+| **AIGC 生成器模板模式与 LLM 模式切换** | 四生成器均实现 `_try_llm_generate()` → LLM 失败返回 `None` → 自动降级模板填充，零停机 |
+| **Gitee.AI API 不可用** | moark.com 等价替代（同沐曦 GPU），带 DeepSeek 自动 Fallback 保障可用性 |
+
+### 系统优化与功能改进
+
+| 版本 | 改进项 |
+|------|--------|
+| v2.0.0 | 四个 AIGC 生成器接入真实 LLM（之前纯模板填充） |
+| v2.0.1 | `platform_adapter.py` 从 `os.getenv` 改为 pydantic Settings 读取 `.env`，修复 Agent 读取不到灵枢配置的 bug |
+| v2.1.0 | 新增 3 个中间件（API 日志/限流/CORS）+ 7 个管理端点 + 用户反馈浮窗 + 前后端合并 Dockerfile |
+| v2.2.0 | 合并 L2 情绪映射层 + 短视频容错 + VibraImage v0.2.0 + 面部识别真实化（OpenCV 像素处理替代 random stub） |
+
+### 技术难点与解决方案
+
+| 难点 | 解决方案 |
+|------|---------|
+| **面部情绪识别无外部 API** | 自研 `FacialExpressionAnalyzer` 类：Haar Cascade 人脸检测 → 面部 ROI 三区域亮度分析 → 嘴部曲率(上下半亮度差)/眼部开度(方差)/眉毛位置(垂直梯度)/对称性 → 规则推断情绪。有人脸检测失败兜底（边缘检测+椭圆拟合） |
+| **VibraImage 短视频崩溃** | `_process_windows()` 增加帧数检测：`n_frames < 3` 直接返回空，`n_frames < window_frames` 自动收缩为一个窗口 |
+| **合成视频人脸检测困难** | 三重级联容错：Haar Cascade `default+alt+alt2` 三文件尝试 → 失败则边缘检测+椭圆拟合寻找人脸轮廓 → 无人脸时返回 `"未检测到人脸"` 而非随机数据 |
+| **L2 情绪映射权重初始值** | 基于 VCE 专著各参数心理学语义设定初始权重矩阵，通过 `calibrate.py` + Pearson 相关系数支持标注数据校正 |
 
 ---
 
