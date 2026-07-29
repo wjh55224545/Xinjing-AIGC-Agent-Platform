@@ -606,6 +606,7 @@ curl http://localhost:8000/api/agents/platform
 | **面部情绪识别无外部 API** | 自研 `FacialExpressionAnalyzer` 类：Haar Cascade 人脸检测 → 面部 ROI 三区域亮度分析 → 嘴部曲率(上下半亮度差)/眼部开度(方差)/眉毛位置(垂直梯度)/对称性 → 规则推断情绪。有人脸检测失败兜底（边缘检测+椭圆拟合） |
 | **VibraImage 短视频崩溃** | `_process_windows()` 增加帧数检测：`n_frames < 3` 直接返回空，`n_frames < window_frames` 自动收缩为一个窗口 |
 | **合成视频人脸检测困难** | 三重级联容错：Haar Cascade `default+alt+alt2` 三文件尝试 → 失败则边缘检测+椭圆拟合寻找人脸轮廓 → 无人脸时返回 `"未检测到人脸"` 而非随机数据 |
+| **真实视频双模态融合验证** | 用真人面部视频（10秒 happy + 9秒 neutral）实测发现：面部规则系统在真实光照/角度下误判 happy 为"愤怒"（mouth_curve 受光照影响），但 VibraImage 前庭振动侧输出正性效价，加权融合后最终情绪为"开心"——**双模态互补价值被验证**，单一模态不可靠但融合结果正确 |
 | **L2 情绪映射权重初始值** | 基于 VCE 专著各参数心理学语义设定初始权重矩阵，通过 `calibrate.py` + Pearson 相关系数支持标注数据校正 |
 
 ---
