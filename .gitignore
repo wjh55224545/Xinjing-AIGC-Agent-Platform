@@ -52,3 +52,4 @@ docs/vibraimage-reference/
 # Node
 frontend/node_modules/
 frontend/dist/
+/static/
