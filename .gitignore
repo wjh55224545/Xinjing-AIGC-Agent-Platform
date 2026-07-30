@@ -46,6 +46,9 @@ desktop.ini
 # 运行日志
 logs/
 
+# 大型参考资料（不在仓库中，开发者本地查阅即可）
+docs/vibraimage-reference/
+
 # Node
 frontend/node_modules/
 frontend/dist/
