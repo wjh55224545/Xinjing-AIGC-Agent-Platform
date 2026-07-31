@@ -3,13 +3,13 @@ from datetime import date
 from sqlalchemy.orm import Session
 from backend.models.student import Student
 from backend.models.daily_report import DailyReport
-from backend.tools.mental_health import MentalHealthAnalysisTool
+from backend.tools.mental_health import EmotionDataPreprocessor
 
 
 class ReportService:
     def __init__(self, db: Session):
         self.db = db
-        self.analysis_tool = MentalHealthAnalysisTool()
+        self.analysis_tool = EmotionDataPreprocessor()
 
     def generate_daily_reports(self, target_date: str | None = None) -> list[dict]:
         target_date = target_date or str(date.today())

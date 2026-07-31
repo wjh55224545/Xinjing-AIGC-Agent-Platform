@@ -9,7 +9,7 @@ import json
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
-from backend.graph.orchestrator import get_orchestrator
+from backend.agents.orchestrator_agent import OrchestratorAgent
 
 router = APIRouter(tags=["SSE流式"])
 
@@ -17,7 +17,7 @@ router = APIRouter(tags=["SSE流式"])
 @router.get("/sse/stream/{run_id}")
 async def stream_agent(run_id: str, request: Request):
     """SSE 流式端点——订阅智能体协作事件流。触发操作请使用 /api/agents/trigger/*"""
-    orchestrator = get_orchestrator()
+    orchestrator = OrchestratorAgent()
     queue = orchestrator.get_queue(run_id)
 
     async def generate():

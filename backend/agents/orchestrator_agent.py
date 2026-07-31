@@ -23,6 +23,12 @@ from backend.agents.alert_agent import AlertAgent
 
 logger = logging.getLogger(__name__)
 
+# 模块级共享状态 — 确保不同OrchestratorAgent实例间队列和结果可共享
+# （例如：POST /api/agents/trigger/outer 创建队列，
+#        GET /api/sse/stream/{run_id} 读取队列）
+_shared_queues: dict[str, asyncio.Queue] = {}
+_shared_results: dict[str, dict] = {}
+
 
 class OrchestratorAgent:
     """
@@ -49,8 +55,6 @@ class OrchestratorAgent:
     def __init__(self, streaming: bool = True, platform: str | None = None):
         self.streaming = streaming
         self.platform = platform
-        self._queues: dict[str, asyncio.Queue] = {}
-        self._results: dict[str, dict] = {}
 
         # 初始化智能体
         self.perception = PerceptionAgent(streaming=streaming, platform=platform)
@@ -67,19 +71,19 @@ class OrchestratorAgent:
         )
 
     def get_queue(self, run_id: str) -> asyncio.Queue:
-        """获取或创建SSE事件队列"""
-        if run_id not in self._queues:
-            self._queues[run_id] = asyncio.Queue()
-        return self._queues[run_id]
+        """获取或创建SSE事件队列（模块级共享）"""
+        if run_id not in _shared_queues:
+            _shared_queues[run_id] = asyncio.Queue()
+        return _shared_queues[run_id]
 
     def remove_queue(self, run_id: str):
-        """清理队列"""
-        self._queues.pop(run_id, None)
-        self._results.pop(run_id, None)
+        """清理队列（模块级共享）"""
+        _shared_queues.pop(run_id, None)
+        _shared_results.pop(run_id, None)
 
     async def _emit(self, run_id: str, event: str, data: dict):
-        """向SSE队列发送事件"""
-        queue = self._queues.get(run_id)
+        """向SSE队列发送事件（模块级共享队列）"""
+        queue = _shared_queues.get(run_id)
         if queue:
             await queue.put({
                 "event": event,
@@ -132,7 +136,7 @@ class OrchestratorAgent:
                 "perception_result": result,
             })
 
-            self._results[run_id] = result
+            _shared_results[run_id] = result
             asyncio.create_task(self._schedule_cleanup(run_id))
             return result
 
@@ -258,7 +262,7 @@ class OrchestratorAgent:
             },
         })
 
-        self._results[run_id] = {"all_results": all_results}
+        _shared_results[run_id] = {"all_results": all_results}
         asyncio.create_task(self._schedule_cleanup(run_id))
         return {"all_results": all_results}
 
