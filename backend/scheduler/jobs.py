@@ -36,7 +36,7 @@ def _log_scheduler_run(job_type: str, result: dict) -> None:
 
 
 async def trigger_inner_loop_job():
-    from backend.graph.orchestrator import get_orchestrator
+    from backend.agents.orchestrator_agent import OrchestratorAgent
     db = SessionLocal()
     try:
         students = db.query(Student).all()
@@ -48,7 +48,7 @@ async def trigger_inner_loop_job():
         _log_scheduler_run("inner", {"error": "无学生"})
         return
 
-    orchestrator = get_orchestrator()
+    orchestrator = OrchestratorAgent()
     run_id = str(uuid.uuid4())
     _ = orchestrator.get_queue(run_id)
     for s in students:
@@ -63,12 +63,27 @@ async def trigger_inner_loop_job():
 
 
 async def trigger_outer_loop_job():
-    from backend.graph.orchestrator import get_orchestrator
-    orchestrator = get_orchestrator()
+    from backend.agents.orchestrator_agent import OrchestratorAgent
+    db = SessionLocal()
+    try:
+        students = db.query(Student).all()
+        student_ids = [s.id for s in students]
+        student_names = {s.id: s.name for s in students}
+    finally:
+        db.close()
+
+    if not student_ids:
+        logger.info("调度: 无学生数据，跳过外环")
+        _log_scheduler_run("outer", {"error": "无学生"})
+        return
+
+    orchestrator = OrchestratorAgent()
     run_id = str(uuid.uuid4())
     _ = orchestrator.get_queue(run_id)
     result = await orchestrator.run_outer_loop(
         target_date=str(date.today()),
+        student_ids=student_ids,
+        student_names=student_names,
         run_id=run_id,
     )
     logger.info(f"调度: 外环完成")

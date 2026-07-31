@@ -156,19 +156,16 @@ async def lifespan(app: FastAPI):
 
     # 打印 GPU 信息
     try:
-        from backend.aigc.llm_client import _get_openai_client, get_gpu_vendor
-        # 尝试一次简单调用以获取 GPU header（异步不阻塞启动）
-        import threading
-        def _probe_gpu():
-            from backend.aigc.llm_client import llm_generate
-            llm_generate("你是测试助手。", "回复: ping", max_tokens=8)
-        t = threading.Thread(target=_probe_gpu, daemon=True)
-        t.start()
-        logger.info(
-            "GPU 探测已启动（后台），首次 LLM 调用将捕获 moark.com 响应头中的 "
-            "GPU 厂商信息（x-vendor: metax → 沐曦 MetaX GPU）"
-        )
+        from backend.vibraimage.gpu_backend import detect_gpu
+        gpu_info = detect_gpu()
+        if gpu_info["available"]:
+            _mb = gpu_info.get("memory_mb", 0)
+            _mem = f"{_mb // 1024}GB" if _mb >= 1024 else f"{_mb}MB"
+            logger.info(f"GPU检测: {gpu_info['vendor']} {gpu_info['model']} ({_mem}), 后端={gpu_info['backend']}")
+        else:
+            logger.info("GPU检测: 未检测到GPU，VibraImage将使用CPU(numpy)")
     except Exception:
+        logger.info("GPU检测: 检测失败，使用CPU兜底")
         pass
 
     logger.info(f"心镜·AIGC智能体平台 v{settings.service_version} 已启动")
@@ -262,6 +259,10 @@ app.include_router(aigc_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(vibraimage_router)
 app.include_router(admin_router, prefix="/api")
+
+# 注册 GPU 状态 API
+from backend.gpu import register_gpu_routes
+register_gpu_routes(app)
 
 
 @app.get("/api/health")

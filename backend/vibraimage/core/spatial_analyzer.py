@@ -14,6 +14,7 @@ VibraImage的E2(Stress)和E6(Charm)都依赖逐行L/R比较。
 import numpy as np
 from typing import Dict, Tuple, List
 from dataclasses import dataclass
+from backend.vibraimage.gpu_backend import benchmark_context
 
 
 @dataclass
@@ -66,64 +67,51 @@ class SpatialAnalyzer:
         """
         执行逐行左右分析。
 
-        Parameters
-        ----------
-        freq_map : np.ndarray, shape (H, W)
-            每个像素的主导频率 [Hz] (来自FrequencyAnalyzer)。
-        amp_map : np.ndarray, shape (H, W)
-            每个像素的振动振幅 (来自FrequencyAnalyzer)。
-
-        Returns
-        -------
-        stats : PerLineStats
-            逐行统计量。
+        Note: 逐行Python for循环决定此模块不适合GPU加速。
+        数据量小（224行），CPU执行已足够。
         """
-        H, W = freq_map.shape
-        mid = W // 2
-        exclude = int(W * self.center_width / 2)
+        with benchmark_context("空间分析"):
+            H, W = freq_map.shape
+            mid = W // 2
+            exclude = int(W * self.center_width / 2)
 
-        # 左右半区的列索引 (排除中线附近)
-        left_cols = slice(0, mid - exclude)
-        right_cols = slice(mid + exclude, W)
+            left_cols = slice(0, mid - exclude)
+            right_cols = slice(mid + exclude, W)
 
-        # 初始化
-        n_lines = H
-        A_L = np.zeros(H, dtype=np.float32)
-        A_R = np.zeros(H, dtype=np.float32)
-        F_L = np.zeros(H, dtype=np.float32)
-        F_R = np.zeros(H, dtype=np.float32)
-        W_L = np.zeros(H, dtype=np.float32)
-        W_R = np.zeros(H, dtype=np.float32)
-        C_L = np.zeros(H, dtype=np.float32)
-        C_R = np.zeros(H, dtype=np.float32)
+            n_lines = H
+            A_L = np.zeros(H, dtype=np.float32)
+            A_R = np.zeros(H, dtype=np.float32)
+            F_L = np.zeros(H, dtype=np.float32)
+            F_R = np.zeros(H, dtype=np.float32)
+            W_L = np.zeros(H, dtype=np.float32)
+            W_R = np.zeros(H, dtype=np.float32)
+            C_L = np.zeros(H, dtype=np.float32)
+            C_R = np.zeros(H, dtype=np.float32)
 
-        for i in range(H):
-            # 左侧
-            left_amps = amp_map[i, left_cols]
-            left_freqs = freq_map[i, left_cols]
-            left_valid = np.isfinite(left_freqs) & (left_freqs > 0)
+            for i in range(H):
+                left_amps = amp_map[i, left_cols]
+                left_freqs = freq_map[i, left_cols]
+                left_valid = np.isfinite(left_freqs) & (left_freqs > 0)
 
-            if np.any(left_valid):
-                A_L[i] = np.mean(left_amps[left_valid]) if np.any(left_valid) else 0.0
-                F_L[i] = np.max(left_freqs[left_valid]) if np.any(left_valid) else 0.0
-                W_L[i] = np.mean(left_amps[left_valid]) if np.any(left_valid) else 0.0
-                C_L[i] = np.max(left_freqs[left_valid]) if np.any(left_valid) else 0.0
+                if np.any(left_valid):
+                    A_L[i] = np.mean(left_amps[left_valid])
+                    F_L[i] = np.max(left_freqs[left_valid])
+                    W_L[i] = np.mean(left_amps[left_valid])
+                    C_L[i] = np.max(left_freqs[left_valid])
 
-            # 右侧
-            right_amps = amp_map[i, right_cols]
-            right_freqs = freq_map[i, right_cols]
-            right_valid = np.isfinite(right_freqs) & (right_freqs > 0)
+                right_amps = amp_map[i, right_cols]
+                right_freqs = freq_map[i, right_cols]
+                right_valid = np.isfinite(right_freqs) & (right_freqs > 0)
 
-            if np.any(right_valid):
-                A_R[i] = np.mean(right_amps[right_valid]) if np.any(right_valid) else 0.0
-                F_R[i] = np.max(right_freqs[right_valid]) if np.any(right_valid) else 0.0
-                W_R[i] = np.mean(right_amps[right_valid]) if np.any(right_valid) else 0.0
-                C_R[i] = np.max(right_freqs[right_valid]) if np.any(right_valid) else 0.0
+                if np.any(right_valid):
+                    A_R[i] = np.mean(right_amps[right_valid])
+                    F_R[i] = np.max(right_freqs[right_valid])
+                    W_R[i] = np.mean(right_amps[right_valid])
+                    C_R[i] = np.max(right_freqs[right_valid])
 
-        # 过滤全零行 (没有有效像素的行)
-        valid_rows = np.any(
-            np.stack([A_L, A_R, F_L, F_R], axis=0) > 0, axis=0
-        )
+            valid_rows = np.any(
+                np.stack([A_L, A_R, F_L, F_R], axis=0) > 0, axis=0
+            )
 
         return PerLineStats(
             A_L=A_L[valid_rows],

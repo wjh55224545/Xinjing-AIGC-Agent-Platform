@@ -34,9 +34,9 @@ class DailyReport(Base):
     entropy: Mapped[float] = mapped_column(Float, default=0.5)  # 情绪波动熵值
     recovery_speed: Mapped[float] = mapped_column(Float, default=0.5)  # 情绪恢复速度
 
-    # LSTM-Transformer分析结果（JSON格式）
-    lstm_prediction: Mapped[str] = mapped_column(String(1024), default="{}")
-    attention_risk_periods: Mapped[str] = mapped_column(String(1024), default="[]")
+    # LLM分析结果（JSON格式，由Lingshu-32B生成）
+    llm_prediction: Mapped[str] = mapped_column(String(1024), default="{}")
+    llm_risk_periods: Mapped[str] = mapped_column(String(1024), default="[]")
 
     # 汇总文本
     summary_text: Mapped[str] = mapped_column(String(1024), default="")
