@@ -175,8 +175,13 @@ class PerPixelFrequencyAnalyzer:
             return self._zerocross_analysis(diff_seq)
 
         dominant_idx = xp.argmax(valid_fft, dim=0)
+        # 统一在GPU上完成索引（rfftfreq已修复为GPU tensor，
+        # xp.arange需显式指定device避免跨设备索引）
+        device = valid_fft.device
+        idx_h = xp.arange(H, device=device)[:, None]
+        idx_w = xp.arange(W, device=device)
         freq_map = to_cpu(valid_freqs[dominant_idx]).astype(np.float32)
-        amp_map = to_cpu(valid_fft[dominant_idx, xp.arange(H)[:, None], xp.arange(W)]).astype(np.float32)
+        amp_map = to_cpu(valid_fft[dominant_idx, idx_h, idx_w]).astype(np.float32)
 
         return FrequencyResult(
             freq_map=freq_map, amp_map=amp_map,

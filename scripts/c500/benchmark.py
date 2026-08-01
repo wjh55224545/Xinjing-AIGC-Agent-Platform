@@ -224,27 +224,32 @@ def test_end_to_end():
     def gpu():
         from backend.vibraimage.gpu_backend import to_gpu, to_cpu, histogram
         xp = __import__('torch')
+        device = 'cuda'
         g = to_gpu(frames)
         # 帧差分
         diff = xp.abs(xp.diff(g, dim=0))
         # FFT
         fft_r = xp.abs(xp.fft.rfft(diff, dim=0))
-        freqs_f = xp.fft.rfftfreq(diff.shape[0], d=1/30.0)
-        # 主导频率 & 振幅
+        freqs_f = xp.fft.rfftfreq(diff.shape[0], d=1/30.0, device=device)
+        # 主导频率 & 振幅（全部在同一GPU设备上索引）
         freq_mask = (freqs_f >= 0.1) & (freqs_f <= 10.0)
         valid_fft = fft_r[freq_mask]
         dominant_idx = xp.argmax(valid_fft, dim=0)
+        idx_h = xp.arange(224, device=device)[:, None]
+        idx_w = xp.arange(224, device=device)
         freq_map = freqs_f[freq_mask][dominant_idx]
-        amp_map = valid_fft[dominant_idx, xp.arange(224)[:, None], xp.arange(224)]
+        amp_map = valid_fft[dominant_idx, idx_h, idx_w]
         # 直方图
         histogram(freq_map.ravel(), bins=100, range=(0.1, 10.0))
-        # 空间分析
-        H, W = freq_map.shape
+        # 空间分析（转CPU，逐行Python循环不适合GPU）
+        freq_map_cpu = to_cpu(freq_map)
+        amp_map_cpu = to_cpu(amp_map)
+        H, W = freq_map_cpu.shape
         mid = W // 2
         for i in range(H):
-            lv = freq_map[i, :mid] > 0
+            lv = freq_map_cpu[i, :mid] > 0
             if lv.any():
-                _ = xp.mean(amp_map[i, :mid][lv])
+                _ = np.mean(amp_map_cpu[i, :mid][lv])
         to_cpu(diff)
 
     return benchmark("全流水线端到端", cpu, gpu)
