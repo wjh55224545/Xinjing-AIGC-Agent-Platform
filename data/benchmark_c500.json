@@ -1,0 +1,46 @@
+{
+  "gpu_vendor": "MetaX (沐曦)",
+  "gpu_model": "MetaX C500",
+  "memory_mb": 15584,
+  "tests": [
+    {
+      "name": "帧差分 (100×224×224)",
+      "cpu_ms": 7.32,
+      "gpu_ms": 1.53,
+      "speedup": 4.79
+    },
+    {
+      "name": "FFT (100×224×224)",
+      "cpu_ms": 45.56,
+      "gpu_ms": 6.61,
+      "speedup": 6.89
+    },
+    {
+      "name": "频率直方图 (224×224)",
+      "cpu_ms": 0.79,
+      "gpu_ms": 0.13,
+      "speedup": 6.14
+    },
+    {
+      "name": "空间分析 (224行)",
+      "cpu_ms": 4.46,
+      "gpu_ms": 83.11,
+      "speedup": 0.05
+    },
+    {
+      "name": "YOLOv8推理 (10帧)",
+      "cpu_ms": 849.83,
+      "gpu_ms": 293.32,
+      "speedup": 2.9
+    },
+    {
+      "name": "全流水线端到端",
+      "cpu_ms": 91.26,
+      "gpu_ms": 6.49,
+      "speedup": 14.06
+    }
+  ],
+  "avg_speedup": 5.8,
+  "min_speedup": 0.05,
+  "max_speedup": 14.06
+}

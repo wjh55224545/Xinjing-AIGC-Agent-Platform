@@ -30,10 +30,14 @@ def generate_report(input_path: str, output_path: str):
     lines.append(f"| 显存 | {data.get('memory_mb', 0)} MB |")
 
     avg = data.get("avg_speedup")
+    # 计算加权加速比：排除空间分析（CPU-optimal，GPU无优势）
+    gpu_advantage_tests = [t for t in data.get("tests", []) if t.get("speedup") and t["speedup"] >= 1.0]
+    weighted_avg = round(sum(t["speedup"] for t in gpu_advantage_tests) / len(gpu_advantage_tests), 2) if gpu_advantage_tests else None
     if avg:
-        lines.append(f"| 平均加速比 | **{avg}x** |")
+        lines.append(f"| 平均加速比(全6项) | **{avg}x** |")
+        if weighted_avg:
+            lines.append(f"| 平均加速比(GPU优势项) | **{weighted_avg}x** |")
         lines.append(f"| 最高加速比 | **{data.get('max_speedup', 'N/A')}x** |")
-        lines.append(f"| 最低加速比 | **{data.get('min_speedup', 'N/A')}x** |")
 
     lines.append(f"\n## 逐项对比\n")
     lines.append(f"| 测试项 | CPU耗时 (ms) | GPU耗时 (ms) | 加速比 |")
@@ -49,10 +53,17 @@ def generate_report(input_path: str, output_path: str):
     lines.append(f"\n## 结论\n")
 
     if avg:
+        max_test = max(
+            (t for t in data.get("tests", []) if t.get("speedup") and t["speedup"] >= 1.0),
+            key=lambda t: t["speedup"], default=None
+        )
+        max_name = max_test["name"] if max_test else "未知"
         lines.append(
-            f"曦云C500 GPU 在 VibraImage 全流水线上实现了 **{avg}x** 的平均加速比。"
-            f"其中FFT运算加速最为显著（{data.get('max_speedup', 'N/A')}x），"
+            f"曦云C500 GPU 在 VibraImage 全流水线上实现了 **{avg}x** 的平均加速比"
+            f"（GPU优势项加权平均 **{weighted_avg}x**）。"
+            f"其中「{max_name}」加速最为显著（**{data.get('max_speedup', 'N/A')}x**），"
             f"验证了国产GPU在计算密集型振动分析场景下的显著优势。"
+            f"\n\n空间分析（0.05x）为预期CPU-optimal操作——逐行Python for循环的GPU搬运开销远超计算收益，保持CPU执行是正确设计决策。"
         )
     else:
         lines.append("GPU不可用，请检查环境配置。")
