@@ -13,6 +13,10 @@
 import numpy as np
 from typing import Tuple, Optional
 from dataclasses import dataclass
+from backend.vibraimage.gpu_backend import (
+    get_array_module, is_gpu_available, to_gpu, to_cpu,
+    rfft, rfftfreq, benchmark_context,
+)
 
 
 @dataclass
@@ -63,19 +67,14 @@ class PerPixelFrequencyAnalyzer:
         if method not in ('zerocross', 'fft', 'auto'):
             raise ValueError(f"Unknown method: {method}")
 
+    def _xp(self):
+        """获取当前数组模块。"""
+        return get_array_module()
+
     def analyze(self, diff_seq: np.ndarray) -> FrequencyResult:
         """
         分析整个差分序列，返回逐像素频率和振幅。
-
-        Parameters
-        ----------
-        diff_seq : np.ndarray, shape (N_frames, H, W)
-            帧差分序列。通常来自 FrameDifferencer.compute()。
-
-        Returns
-        -------
-        result : FrequencyResult
-            包含 freq_map, amp_map 和可选的 per_pixel_spectra。
+        GPU可用时自动在GPU上执行FFT分析。
         """
         if self.method in ('zerocross', 'auto'):
             return self._zerocross_analysis(diff_seq)
@@ -84,102 +83,104 @@ class PerPixelFrequencyAnalyzer:
 
     def _zerocross_analysis(self, diff_seq: np.ndarray) -> FrequencyResult:
         """
-        过零率法频率分析。
-
-        原理: 对于正弦信号，每个周期有2次过零。
-        因此 f = zero_crossings / (2 × duration)
-
-        对每个像素:
-        1. 减去均值 (去直流分量)
-        2. 统计符号变化的次数
-        3. freq = N_zero_crossings / (2 × total_time)
-        4. amp = RMS of detrended signal
-
-        复杂度: O(H×W×N), 对224×224×100 ≈ 5M次操作。
+        过零率法频率分析（CPU/GPU通用）。
         """
-        H, W = diff_seq.shape[1], diff_seq.shape[2]
-        N = diff_seq.shape[0]
         dt = 1.0 / self.frame_rate
+        N = diff_seq.shape[0]
         total_time = N * dt
 
-        # 去直流分量: 每像素减去自身均值
-        mean_per_pixel = np.mean(diff_seq, axis=0)
-        detrended = diff_seq - mean_per_pixel[np.newaxis, :, :]
-
-        # 过零计数: sign change between consecutive frames
-        # sign(diff[t]) != sign(diff[t+1])
-        signs = np.sign(detrended)
-        zero_crossings = np.sum(
-            (signs[:-1] * signs[1:]) < 0, axis=0
-        ).astype(np.float32)
-
-        # 频率: f = N_zc / (2 × T)
-        freq_map = zero_crossings / (2.0 * total_time)
-
-        # 振幅: RMS
-        amp_map = np.sqrt(np.mean(detrended ** 2, axis=0))
-
-        # 限制频率在有效频段内
-        freq_map = np.clip(freq_map, self.freq_band[0], self.freq_band[1])
-
-        # 构建简易频谱 (用于E3的频谱功率分布)
-        # 过零率法无法提供完整频谱，用频率直方图加权替代
-        per_pixel_spectra = None
+        with benchmark_context("频率分析(过零率)"):
+            if is_gpu_available():
+                xp = self._xp()
+                g = to_gpu(diff_seq)
+                mean_per_pixel = xp.mean(g, dim=0)
+                detrended = g - mean_per_pixel.unsqueeze(0)
+                signs = xp.sign(detrended)
+                zero_crossings = xp.sum(
+                    (signs[:-1] * signs[1:] < 0).float(), dim=0
+                )
+                freq_map_g = zero_crossings / (2.0 * total_time)
+                freq_map_g = xp.clip(freq_map_g, self.freq_band[0], self.freq_band[1])
+                amp_map_g = xp.sqrt(xp.mean(detrended ** 2, dim=0))
+                freq_map = to_cpu(freq_map_g).astype(np.float32)
+                amp_map = to_cpu(amp_map_g).astype(np.float32)
+            else:
+                mean_per_pixel = np.mean(diff_seq, axis=0)
+                detrended = diff_seq - mean_per_pixel[np.newaxis, :, :]
+                signs = np.sign(detrended)
+                zero_crossings = np.sum((signs[:-1] * signs[1:]) < 0, axis=0).astype(np.float32)
+                freq_map = (zero_crossings / (2.0 * total_time)).astype(np.float32)
+                freq_map = np.clip(freq_map, self.freq_band[0], self.freq_band[1])
+                amp_map = np.sqrt(np.mean(detrended ** 2, axis=0)).astype(np.float32)
 
         return FrequencyResult(
-            freq_map=freq_map.astype(np.float32),
-            amp_map=amp_map.astype(np.float32),
-            per_pixel_spectra=per_pixel_spectra,
+            freq_map=freq_map, amp_map=amp_map, per_pixel_spectra=None,
         )
 
     def _fft_analysis(self, diff_seq: np.ndarray) -> FrequencyResult:
         """
-        FFT法频率分析。
-
-        对每个像素的时间序列做FFT:
-        1. 取主导频率 = argmax(|FFT|) in [0.1, 10] Hz
-        2. 振幅 = |FFT[dominant_freq]|
-        3. 保留完整频谱用于E3计算
-
-        复杂度: O(H×W×N×logN)
-        对224×224×100: 约50,176 × 100 × log2(100) ≈ 35M次浮点运算。
-        使用NumPy向量化FFT批量处理。
+        FFT法频率分析。GPU可用时FFT在GPU上执行（加速最显著的操作）。
         """
         H, W = diff_seq.shape[1], diff_seq.shape[2]
         N = diff_seq.shape[0]
         dt = 1.0 / self.frame_rate
 
-        # 去直流分量
+        with benchmark_context("频率分析(FFT)"):
+            if is_gpu_available():
+                return self._fft_analysis_gpu(diff_seq, H, W, N, dt)
+            return self._fft_analysis_cpu(diff_seq, H, W, N, dt)
+
+    def _fft_analysis_cpu(self, diff_seq, H, W, N, dt) -> FrequencyResult:
+        """FFT分析CPU版。"""
         mean_per_pixel = np.mean(diff_seq, axis=0)
         detrended = diff_seq - mean_per_pixel[np.newaxis, :, :]
-
-        # 对整个diff_seq做FFT (沿时间轴)
-        # detrended shape: (N, H, W)
-        # fft_result shape: (N, H, W)
         fft_result = np.abs(np.fft.rfft(detrended, axis=0))
         freqs = np.fft.rfftfreq(N, d=dt)
 
-        # 找到有效频段范围内的索引
         freq_mask = (freqs >= self.freq_band[0]) & (freqs <= self.freq_band[1])
         valid_freqs = freqs[freq_mask]
         valid_fft = fft_result[freq_mask]
 
         if len(valid_freqs) == 0:
-            # 退化为过零率法
             return self._zerocross_analysis(diff_seq)
 
-        # 在有效频段内找主导频率
-        dominant_idx = np.argmax(valid_fft, axis=0)  # (H, W)
-        freq_map = valid_freqs[dominant_idx]  # (H, W)
-        amp_map = valid_fft[dominant_idx, np.arange(H)[:, None], np.arange(W)]  # (H, W)
-
-        # 保留完整频谱 (仅有效频段)
-        per_pixel_spectra = valid_fft  # (N_valid_freq, H, W)
+        dominant_idx = np.argmax(valid_fft, axis=0)
+        freq_map = valid_freqs[dominant_idx]
+        amp_map = valid_fft[dominant_idx, np.arange(H)[:, None], np.arange(W)]
+        per_pixel_spectra = valid_fft
 
         return FrequencyResult(
             freq_map=freq_map.astype(np.float32),
             amp_map=amp_map.astype(np.float32),
             per_pixel_spectra=per_pixel_spectra.astype(np.float32),
+        )
+
+    def _fft_analysis_gpu(self, diff_seq, H, W, N, dt) -> FrequencyResult:
+        """FFT分析GPU版（PyTorch）。"""
+        xp = self._xp()
+        g = to_gpu(diff_seq)
+        mean_per_pixel = xp.mean(g, dim=0)
+        detrended = g - mean_per_pixel.unsqueeze(0)
+        fft_result = xp.abs(rfft(detrended, axis=0))
+        freqs = rfftfreq(N, d=dt)
+
+        freq_mask = (freqs >= self.freq_band[0]) & (freqs <= self.freq_band[1])
+        if hasattr(freq_mask, 'cpu'):
+            valid_freqs = freqs[freq_mask]
+        else:
+            valid_freqs = freqs[freq_mask]
+        valid_fft = fft_result[freq_mask]
+
+        if len(valid_freqs) == 0:
+            return self._zerocross_analysis(diff_seq)
+
+        dominant_idx = xp.argmax(valid_fft, dim=0)
+        freq_map = to_cpu(valid_freqs[dominant_idx]).astype(np.float32)
+        amp_map = to_cpu(valid_fft[dominant_idx, xp.arange(H)[:, None], xp.arange(W)]).astype(np.float32)
+
+        return FrequencyResult(
+            freq_map=freq_map, amp_map=amp_map,
+            per_pixel_spectra=None,  # 频谱太大，按需时才传回CPU
         )
 
     def compute_f1_parameter(self, diff_seq: np.ndarray) -> np.ndarray:

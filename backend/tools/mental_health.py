@@ -1,36 +1,20 @@
 """
-时序心理健康分析工具 (MentalHealthAnalysisTool)
-===============================================
+情绪数据预处理器 (EmotionDataPreprocessor)
+==========================================
 
 功能说明：
-- 基于LSTM-Transformer混合模型，定期从OBS拉取个体7天情绪时序数据
-- 计算情绪波动熵值、负面情绪累积度、社交互动频次等12项心理健康指标
-- 输出风险等级(绿色/黄色/红色)及具体建议
+- 从数据库/OBS拉取学生7天情绪时序数据
+- 计算真实统计指标（均值/方差/熵/趋势等），为LLM生成结构化分析上下文
+- 风险等级规则兜底校验
+- 模板建议作为LLM补充
 
-12项心理健康指标：
-1. 情绪稳定性指数 (Emotional Stability Index)
-2. 情绪波动熵值 (Emotion Fluctuation Entropy)
-3. 负面情绪累积度 (Negative Emotion Accumulation)
-4. 社交互动频次 (Social Interaction Frequency)
-5. 日间情绪趋势 (Daily Emotion Trend)
-6. 唤醒度异常指数 (Arousal Abnormality Index)
-7. 情绪恢复速度 (Emotion Recovery Speed)
-8. 睡眠质量预测 (Sleep Quality Prediction)
-9. 压力累积指数 (Stress Accumulation Index)
-10. 积极情绪占比 (Positive Emotion Ratio)
-11. 情绪突变检测 (Emotion Abrupt Change Detection)
-12. 综合心理健康评分 (Overall Mental Health Score)
-
-风险等级判定：
-- 绿色 (Green): 综合评分 >= 0.7, 无红色预警指标
-- 黄色 (Yellow): 综合评分 0.4-0.7, 或有1-2项黄色指标
-- 红色 (Red): 综合评分 < 0.4, 或有3项以上黄色指标, 或任意红色指标触发
+定位：数据预处理器 → 喂给 Lingshu-32B 做真正的智能分析。
+心理分析、风险识别、趋势预测等语义理解任务由LLM完成。
 """
 
 from __future__ import annotations
-import random
 import math
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, List
 from backend.tools.base import BaseTool, ToolResult
 
@@ -42,13 +26,13 @@ NEGATIVE_EMOTIONS = ["悲伤", "焦虑", "愤怒", "恐惧", "厌恶"]
 POSITIVE_EMOTIONS = ["开心", "平静"]
 
 
-class MentalHealthAnalysisTool(BaseTool):
-    """时序心理健康分析工具 - 基于LSTM-Transformer混合模型"""
+class EmotionDataPreprocessor(BaseTool):
+    """情绪数据预处理器 — 计算统计指标，为LLM分析提供结构化上下文"""
 
-    name = "时序心理分析"
+    name = "情绪数据预处理"
     description = (
-        "分析学生情绪时序数据，计算12项心理健康指标，识别异常模式并输出注意力风险评分。"
-        "基于LSTM-Transformer混合模型进行深度时序分析，输出绿色/黄色/红色风险等级及具体建议。"
+        "预处理学生7天情绪时序数据，计算统计指标（稳定性、熵、趋势等），"
+        "为Lingshu-32B医疗大模型提供结构化分析上下文。"
     )
 
     def __init__(self):
@@ -65,7 +49,7 @@ class MentalHealthAnalysisTool(BaseTool):
         **kwargs
     ) -> ToolResult:
         """
-        执行时序心理健康分析
+        预处理情绪数据，生成结构化分析上下文
 
         Args:
             student_id: 学生ID
@@ -83,26 +67,19 @@ class MentalHealthAnalysisTool(BaseTool):
             # 步骤2: 提取情绪时间序列
             emotion_series = self._extract_emotion_series(all_records)
 
-            # 步骤3: 计算12项心理健康指标
+            # 步骤3: 计算统计指标
             indicators = self._calculate_indicators(
                 emotion_series, baseline, all_records
             )
 
-            # 步骤4: LSTM-Transformer深度分析
-            lstm_transformer_result = self._lstm_transformer_analysis(
-                emotion_series, indicators
-            )
+            # 步骤4: 规则兜底风险等级判定
+            risk_level, risk_reason = self._determine_risk_level(indicators)
 
-            # 步骤5: 风险等级判定
-            risk_level, risk_reason = self._determine_risk_level(indicators, lstm_transformer_result)
+            # 步骤5: 生成模板建议（LLM补充）
+            suggestions = self._generate_suggestions(risk_level, indicators)
 
-            # 步骤6: 生成具体建议
-            suggestions = self._generate_suggestions(
-                risk_level, indicators, lstm_transformer_result
-            )
-
-            # 步骤7: 计算综合评分
-            overall_score = self._calculate_overall_score(indicators, lstm_transformer_result)
+            # 步骤6: 计算综合评分
+            overall_score = indicators.get("overall_mental_health_score", 0.5)
 
             return ToolResult(
                 success=True,
@@ -115,16 +92,15 @@ class MentalHealthAnalysisTool(BaseTool):
                     "baseline": baseline,
                     "baseline_deviation": round(abs(indicators["avg_emotion"] - baseline), 3),
 
-                    # 12项心理健康指标
+                    # 统计指标
                     "indicators": indicators,
-                    "lstm_transformer_analysis": lstm_transformer_result,
 
-                    # 风险评估
+                    # 规则兜底
                     "risk_level": risk_level,
                     "risk_reason": risk_reason,
                     "overall_score": round(overall_score, 3),
 
-                    # 建议
+                    # 模板建议
                     "suggestions": suggestions,
 
                     # 情绪分布统计
@@ -133,14 +109,12 @@ class MentalHealthAnalysisTool(BaseTool):
                     "positive_emotion_ratio": round(indicators["positive_emotion_ratio"], 3),
 
                     # 风险因素
-                    "risk_factors": self._identify_risk_factors(indicators, lstm_transformer_result),
+                    "risk_factors": self._identify_risk_factors(indicators),
                     "protective_factors": self._identify_protective_factors(indicators),
 
                     # 元数据
                     "records_analyzed": len(all_records),
                     "analysis_window_days": analysis_window_days,
-                    "model_version": "LSTM-Transformer-v2.1",
-                    "confidence": round(0.85 + random.uniform(0, 0.1), 2),
                     "analyzed_at": datetime.now().isoformat(),
                 },
             )
@@ -149,7 +123,7 @@ class MentalHealthAnalysisTool(BaseTool):
             return ToolResult(
                 success=False,
                 data={},
-                error=f"时序心理分析失败: {str(e)}"
+                error=f"数据预处理失败: {str(e)}"
             )
 
     def _merge_records(self, records: list | None, obs_records: list | None) -> list:
@@ -179,7 +153,7 @@ class MentalHealthAnalysisTool(BaseTool):
         baseline: float,
         records: list
     ) -> dict:
-        """计算12项心理健康指标"""
+        """计算真实统计指标（不做任何LLM级别的分析）"""
         if not emotion_series:
             return self._default_indicators(baseline)
 
@@ -220,10 +194,10 @@ class MentalHealthAnalysisTool(BaseTool):
         # 10. 情绪突变检测
         abrupt_changes = self._detect_abrupt_changes(scores)
 
-        # 11. 社交互动频次 (模拟，从记录间隔推断)
+        # 11. 社交互动频次
         interaction_frequency = min(1.0, len(emotion_series) / 10)
 
-        # 12. 综合心理健康评分 (基于所有指标)
+        # 12. 综合心理健康评分 (纯统计加权)
         mental_health_score = self._compute_mental_health_score(
             stability, negative_accumulation, trend_slope, recovery_speed, positive_emotion_ratio
         )
@@ -243,32 +217,27 @@ class MentalHealthAnalysisTool(BaseTool):
             trend = "稳定"
 
         return {
-            # 基础统计
             "avg_emotion": round(avg_emotion, 3),
             "variance": round(variance, 4),
             "trend": trend,
             "trend_slope": round(trend_slope, 4),
 
-            # 12项指标
-            "emotional_stability_index": round(stability, 3),           # 指标1
-            "emotion_fluctuation_entropy": round(emotion_entropy, 3),    # 指标2
-            "negative_emotion_accumulation": round(negative_accumulation, 3),  # 指标3
-            "social_interaction_frequency": round(interaction_frequency, 3),    # 指标4
-            "daily_emotion_trend": trend,                                   # 指标5
-            "arousal_abnormality_index": round(arousal_abnormality, 3),    # 指标6
-            "emotion_recovery_speed": round(recovery_speed, 3),             # 指标7
-            "sleep_quality_prediction": round(random.uniform(0.6, 0.9), 2), # 指标8 (模拟)
-            "stress_accumulation_index": round(negative_accumulation * 1.2, 3),  # 指标9
-            "positive_emotion_ratio": round(positive_emotion_ratio, 3),     # 指标10
-            "emotion_abrupt_change_count": abrupt_changes,                   # 指标11
-            "overall_mental_health_score": round(mental_health_score, 3),    # 指标12
+            "emotional_stability_index": round(stability, 3),
+            "emotion_fluctuation_entropy": round(emotion_entropy, 3),
+            "negative_emotion_accumulation": round(negative_accumulation, 3),
+            "social_interaction_frequency": round(interaction_frequency, 3),
+            "daily_emotion_trend": trend,
+            "arousal_abnormality_index": round(arousal_abnormality, 3),
+            "emotion_recovery_speed": round(recovery_speed, 3),
+            "stress_accumulation_index": round(negative_accumulation * 1.2, 3),
+            "positive_emotion_ratio": round(positive_emotion_ratio, 3),
+            "emotion_abrupt_change_count": abrupt_changes,
+            "overall_mental_health_score": round(mental_health_score, 3),
 
-            # 情绪分布
             "emotion_distribution": emotion_distribution,
             "negative_emotion_ratio": round(negative_emotion_ratio, 3),
             "positive_emotion_ratio": round(positive_emotion_ratio, 3),
 
-            # 基线对比
             "baseline_deviation": round(abs(avg_emotion - baseline), 3),
         }
 
@@ -277,7 +246,6 @@ class MentalHealthAnalysisTool(BaseTool):
         if not scores:
             return 0.0
 
-        # 将连续分数离散化为5个区间
         bins = [-0.1, 0.25, 0.45, 0.65, 0.85, 1.1]
         counts = [0] * 5
 
@@ -287,7 +255,6 @@ class MentalHealthAnalysisTool(BaseTool):
                     counts[i] += 1
                     break
 
-        # 计算熵
         total = sum(counts)
         if total == 0:
             return 0.0
@@ -298,7 +265,6 @@ class MentalHealthAnalysisTool(BaseTool):
                 p = c / total
                 entropy -= p * math.log2(p)
 
-        # 归一化到0-1
         return entropy / math.log2(5)
 
     def _calculate_trend(self, scores: list) -> float:
@@ -326,7 +292,6 @@ class MentalHealthAnalysisTool(BaseTool):
         if len(emotion_series) < 3:
             return 0.5
 
-        # 统计从负面到正面的转换次数
         transitions = 0
         for i in range(1, len(emotion_series)):
             prev = emotion_series[i - 1]["emotion"]
@@ -335,7 +300,6 @@ class MentalHealthAnalysisTool(BaseTool):
             if prev in NEGATIVE_EMOTIONS and curr in POSITIVE_EMOTIONS:
                 transitions += 1
 
-        # 恢复速度 = 转换次数 / 可能的最大转换次数
         max_transitions = len(emotion_series) - 1
         return transitions / max_transitions if max_transitions > 0 else 0.5
 
@@ -361,111 +325,23 @@ class MentalHealthAnalysisTool(BaseTool):
         recovery_speed: float,
         positive_ratio: float
     ) -> float:
-        """计算综合心理健康评分"""
-        # 加权计算
+        """计算综合心理健康评分（统计加权，非LLM分析）"""
         score = (
             stability * 0.25 +
             (1 - negative_accumulation) * 0.20 +
-            (trend_slope + 0.5) * 0.15 +  # 趋势标准化
+            (trend_slope + 0.5) * 0.15 +
             recovery_speed * 0.20 +
             positive_ratio * 0.20
         )
         return max(0, min(1, score))
 
-    def _calculate_overall_score(
-        self,
-        indicators: dict,
-        lstm_result: dict
-    ) -> float:
+    def _determine_risk_level(self, indicators: dict) -> tuple:
         """
-        计算综合心理健康评分（供外部调用）
-        结合12项指标和LSTM-Transformer分析结果
+        规则兜底校验 — 纯if-else阈值判断。
+        真正的风险分析由Lingshu-32B完成，这里只是安全网。
         """
-        # 从指标中提取各项评分
-        base_score = indicators.get("overall_mental_health_score", 0.5)
-
-        # LSTM-Transformer预测调整
-        lstm_prediction = lstm_result.get("prediction", {})
-        predicted_score = lstm_prediction.get("next_day_emotion", base_score)
-
-        # 如果LSTM预测显示恶化，则降低评分
-        if predicted_score < base_score - 0.1:
-            base_score = base_score * 0.9
-
-        # 如果检测到风险模式，则进一步调整
-        if lstm_result.get("risk_pattern_detected"):
-            base_score = base_score * 0.85
-
-        return max(0, min(1, base_score))
-
-    def _lstm_transformer_analysis(self, emotion_series: list, indicators: dict) -> dict:
-        """
-        LSTM-Transformer混合模型分析（模拟）
-        真实实现应使用PyTorch训练模型进行时序预测
-        """
-        # 模拟LSTM层输出（隐藏状态）
-        lstm_hidden = {
-            "short_term_pattern": random.uniform(0.5, 0.9),
-            "long_term_dependency": random.uniform(0.4, 0.8),
-            "attention_weights": [random.uniform(0.1, 0.4) for _ in range(min(5, len(emotion_series)))],
-        }
-
-        # 模拟Transformer层输出（注意力机制识别风险时段）
-        risk_hours = []
-        if emotion_series:
-            for i, s in enumerate(emotion_series[:min(8, len(emotion_series))]):
-                hour = (i * 3 + 8) % 24  # 模拟上午8点开始，每3小时一个点
-                if s["score"] < 0.5 or s["emotion"] in NEGATIVE_EMOTIONS:
-                    risk_hours.append(hour)
-
-        # 预测下一日情绪
-        avg_score = indicators.get("avg_emotion", 0.5)
-        trend = indicators.get("trend_slope", 0)
-        predicted_next_day = max(0, min(1, avg_score + trend))
-
-        # 预测置信区间
-        variance = indicators.get("variance", 0.1)
-        confidence_interval = (
-            max(0, predicted_next_day - math.sqrt(variance) * 1.96),
-            min(1, predicted_next_day + math.sqrt(variance) * 1.96)
-        )
-
-        # 注意力风险时段
-        attention_risk_periods = []
-        for hour in risk_hours[:3]:  # 最多3个风险时段
-            period_name = f"{hour}:00-{hour+2}:00"
-            attention_risk_periods.append({
-                "time_range": period_name,
-                "risk_score": round(random.uniform(0.6, 0.9), 2),
-            })
-
-        return {
-            "lstm_analysis": lstm_hidden,
-            "transformer_attention": {
-                "risk_hours": risk_hours,
-                "attention_risk_periods": attention_risk_periods,
-            },
-            "prediction": {
-                "next_day_emotion": round(predicted_next_day, 3),
-                "confidence_interval_95": [
-                    round(confidence_interval[0], 3),
-                    round(confidence_interval[1], 3)
-                ],
-                "trend_prediction": indicators.get("trend", "稳定"),
-            },
-            "risk_pattern_detected": len(risk_hours) > 2,
-            "model_confidence": round(0.80 + random.uniform(0, 0.15), 2),
-        }
-
-    def _determine_risk_level(
-        self,
-        indicators: dict,
-        lstm_result: dict
-    ) -> tuple:
-        """判定风险等级"""
         score = indicators.get("overall_mental_health_score", 0.5)
 
-        # 红色指标
         red_indicators = []
         if score < 0.3:
             red_indicators.append("综合评分极低")
@@ -473,10 +349,7 @@ class MentalHealthAnalysisTool(BaseTool):
             red_indicators.append("频繁情绪突变")
         if indicators.get("negative_emotion_ratio", 0) > 0.6:
             red_indicators.append("负面情绪占比过高")
-        if lstm_result.get("risk_pattern_detected"):
-            red_indicators.append("检测到风险模式")
 
-        # 黄色指标
         yellow_indicators = []
         if 0.3 <= score < 0.5:
             yellow_indicators.append("综合评分偏低")
@@ -485,7 +358,6 @@ class MentalHealthAnalysisTool(BaseTool):
         if indicators.get("stress_accumulation_index", 0) > 0.5:
             yellow_indicators.append("压力累积")
 
-        # 判定等级
         if red_indicators:
             return "red", "; ".join(red_indicators)
         elif len(yellow_indicators) >= 2 or score < 0.6:
@@ -495,16 +367,10 @@ class MentalHealthAnalysisTool(BaseTool):
         else:
             return "yellow", "需要持续关注"
 
-    def _generate_suggestions(
-        self,
-        risk_level: str,
-        indicators: dict,
-        lstm_result: dict
-    ) -> list:
-        """生成个性化建议"""
+    def _generate_suggestions(self, risk_level: str, indicators: dict) -> list:
+        """生成模板建议 — LLM在分析时会基于这些模板做个性化扩展"""
         suggestions = []
 
-        # 风险等级建议
         if risk_level == "red":
             suggestions.append({
                 "priority": "high",
@@ -534,7 +400,6 @@ class MentalHealthAnalysisTool(BaseTool):
                 "content": "继续保持良好的情绪管理，建议参与正向心理活动提升心理韧性。"
             })
 
-        # 基于具体指标的建议
         if indicators.get("emotion_fluctuation_entropy", 0) > 0.7:
             suggestions.append({
                 "priority": "medium",
@@ -556,23 +421,9 @@ class MentalHealthAnalysisTool(BaseTool):
                 "content": "情绪恢复速度较慢，建议进行情绪韧性训练，提升心理恢复能力。"
             })
 
-        # 基于LSTM预测的建议
-        risk_periods = lstm_result.get("transformer_attention", {}).get("attention_risk_periods", [])
-        if risk_periods:
-            time_ranges = [p["time_range"] for p in risk_periods]
-            suggestions.append({
-                "priority": "low",
-                "category": "时间关注",
-                "content": f"建议在这些时段加强关注：{', '.join(time_ranges)}"
-            })
-
         return suggestions
 
-    def _identify_risk_factors(
-        self,
-        indicators: dict,
-        lstm_result: dict
-    ) -> list:
+    def _identify_risk_factors(self, indicators: dict) -> list:
         """识别风险因素"""
         factors = []
 
@@ -587,9 +438,6 @@ class MentalHealthAnalysisTool(BaseTool):
 
         if indicators.get("trend_slope", 0) < -0.02:
             factors.append("情绪呈下降趋势")
-
-        if lstm_result.get("risk_pattern_detected"):
-            factors.append("LSTM模型检测到风险模式")
 
         return factors if factors else ["无明显风险因素"]
 
@@ -625,7 +473,6 @@ class MentalHealthAnalysisTool(BaseTool):
             "daily_emotion_trend": "稳定",
             "arousal_abnormality_index": 0.3,
             "emotion_recovery_speed": 0.5,
-            "sleep_quality_prediction": 0.7,
             "stress_accumulation_index": 0.2,
             "positive_emotion_ratio": 0.6,
             "emotion_abrupt_change_count": 0,
@@ -635,3 +482,7 @@ class MentalHealthAnalysisTool(BaseTool):
             "positive_emotion_ratio": 0.6,
             "baseline_deviation": 0.0,
         }
+
+
+# 向后兼容别名
+MentalHealthAnalysisTool = EmotionDataPreprocessor

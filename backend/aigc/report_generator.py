@@ -79,9 +79,8 @@ class ReportGenerator:
 
         emotion_overview = self._generate_emotion_overview(name, data, analysis)
         risk_analysis_text = self._generate_risk_analysis(risk_level, analysis)
-        lstm_result = analysis.get("lstm_transformer_analysis", {})
-        prediction = lstm_result.get("prediction", {})
-        next_day_prediction = self._generate_prediction(prediction)
+        llm_prediction = analysis.get("llm_prediction", {})
+        next_day_prediction = self._generate_prediction(llm_prediction)
         suggestions = self._format_suggestions(analysis.get("suggestions", []))
         key_findings = self._generate_key_findings(data, analysis)
 
@@ -128,8 +127,7 @@ class ReportGenerator:
         emotion = emotion_data.get("fused_emotion", "未检测")
         suggestions = analysis.get("suggestions", [])
         risk_factors = analysis.get("risk_factors", [])
-        lstm_result = analysis.get("lstm_transformer_analysis", {})
-        prediction = lstm_result.get("prediction", {})
+        llm_prediction = analysis.get("llm_prediction", {})
 
         suggestion_str = "\n".join(
             f"- {s.get('content', str(s))}" if isinstance(s, dict) else f"- {s}"
@@ -161,8 +159,7 @@ class ReportGenerator:
 {risk_str}
 
 ## 明日预测
-- 预测评分：{prediction.get('next_day_emotion', 'N/A')}
-- 趋势预测：{prediction.get('trend_prediction', '稳定')}
+- 趋势预测：{llm_prediction.get('trend_prediction', '稳定') if llm_prediction else '稳定'}
 
 ## 已有建议参考
 {suggestion_str}
@@ -370,7 +367,7 @@ class ReportGenerator:
         return "未检测到明确的持续高风险时段。"
 
     def _gen_next_week_prediction(self, data: dict) -> str:
-        return "基于LSTM-Transformer模型预测，下周情绪将继续保持稳定。"
+        return "基于Lingshu-32B模型分析，下周情绪将继续保持稳定。"
 
     def _gen_weekly_suggestions(self, data: dict) -> str:
         return "- 保持规律作息\n- 建议参与集体活动\n- 持续关注情绪变化"

@@ -13,6 +13,10 @@ E3的高频功率比需要全局频谱，而非单个像素的主导频率。
 
 import numpy as np
 from typing import Tuple, Optional
+from backend.vibraimage.gpu_backend import (
+    get_array_module, is_gpu_available, to_gpu, to_cpu,
+    histogram, benchmark_context,
+)
 
 
 class SpectralPowerDistribution:
@@ -43,6 +47,9 @@ class SpectralPowerDistribution:
         self.freq_band = freq_band
         self.high_freq_threshold = high_freq_threshold
 
+    def _xp(self):
+        return get_array_module()
+
     def compute_from_freq_map(
         self,
         freq_map: np.ndarray,
@@ -51,30 +58,12 @@ class SpectralPowerDistribution:
     ) -> np.ndarray:
         """
         从频率图和振幅图估算频谱功率分布。
-
-        当无法获取完整逐像素FFT频谱时的近似方法:
-        将振幅²按频率bin累加，等价于Σ|FFT(f)|²的直方图版本。
-
-        Parameters
-        ----------
-        freq_map : np.ndarray, shape (H, W)
-            逐像素主导频率 [Hz]。
-        amp_map : np.ndarray, shape (H, W)
-            逐像素振幅。
-        n_frames : int
-            帧数 (用于确定FFT频率分辨率)。
-
-        Returns
-        -------
-        power_spectrum : np.ndarray, shape (n_bins,)
-            聚合功率谱。
+        GPU可用时直方图在GPU上计算。
         """
-        # 频率分辨率
         dt = 1.0 / self.frame_rate
         df = 1.0 / (n_frames * dt)
         n_bins = int((self.freq_band[1] - self.freq_band[0]) / df) + 1
 
-        # 展平
         freqs = freq_map.ravel()
         amps = amp_map.ravel()
         valid = np.isfinite(freqs) & (freqs >= self.freq_band[0]) & (freqs <= self.freq_band[1])
@@ -82,18 +71,25 @@ class SpectralPowerDistribution:
         if not np.any(valid):
             return np.zeros(n_bins)
 
-        freqs_valid = freqs[valid]
-        amps_sq_valid = (amps[valid] ** 2).astype(np.float64)
+        with benchmark_context("频谱功率"):
+            if is_gpu_available():
+                xp = self._xp()
+                freqs_g = to_gpu(freqs[valid])
+                amps_g = to_gpu(amps[valid])
+                amps_sq_g = amps_g ** 2
+                # GPU histogram with weights — histogram helper handles dispatch
+                power_spectrum, _ = histogram(
+                    freqs_g, bins=n_bins, range=self.freq_band,
+                    weights=amps_sq_g if hasattr(amps_sq_g, 'cpu') else None,
+                )
+                return to_cpu(power_spectrum).astype(np.float64)
 
-        # 按频率bin累加功率
-        power_spectrum, _ = np.histogram(
-            freqs_valid,
-            bins=n_bins,
-            range=self.freq_band,
-            weights=amps_sq_valid,
-        )
-
-        return power_spectrum.astype(np.float64)
+            freqs_valid = freqs[valid]
+            amps_sq_valid = (amps[valid] ** 2).astype(np.float64)
+            power_spectrum, _ = np.histogram(
+                freqs_valid, bins=n_bins, range=self.freq_band, weights=amps_sq_valid,
+            )
+            return power_spectrum.astype(np.float64)
 
     def compute_from_spectra(
         self,
@@ -101,35 +97,24 @@ class SpectralPowerDistribution:
         freqs: np.ndarray,
     ) -> np.ndarray:
         """
-        从逐像素FFT频谱计算聚合功率谱。
-
-        P(f_i) = Σ_{x,y} |FFT_{x,y}(f_i)|²
-
-        Parameters
-        ----------
-        per_pixel_spectra : np.ndarray, shape (N_freq, H, W) or (H, W, N_freq)
-            逐像素FFT幅度谱 (有效频段内)。
-        freqs : np.ndarray, shape (N_freq,)
-            对应的频率轴 [Hz]。
-
-        Returns
-        -------
-        power_spectrum : np.ndarray, shape (N_freq,)
-            聚合功率谱 = Σ|FFT|² over all pixels。
+        从逐像素FFT频谱计算聚合功率谱。GPU可用时在GPU上计算。
         """
-        # 确保 shape 是 (N_freq, H, W)
-        if per_pixel_spectra.ndim == 3:
-            if per_pixel_spectra.shape[-1] != len(freqs):
-                # 可能是 (H, W, N_freq) 格式
-                if per_pixel_spectra.shape[0] == len(freqs):
-                    pass  # shape is (N_freq, H, W)
-                else:
-                    per_pixel_spectra = np.moveaxis(per_pixel_spectra, -1, 0)
+        with benchmark_context("频谱聚合"):
+            if is_gpu_available():
+                xp = self._xp()
+                g = to_gpu(per_pixel_spectra)
+                if g.ndim == 3 and g.shape[-1] == len(freqs):
+                    g = xp.moveaxis(g, -1, 0) if hasattr(xp, 'moveaxis') else to_cpu(np.moveaxis(to_cpu(g), -1, 0))
+                power_spectrum = xp.sum(g ** 2, dim=(1, 2))
+                return to_cpu(power_spectrum).astype(np.float64)
 
-        # 跨像素求和: Σ_{x,y} |FFT(f)|²
-        power_spectrum = np.sum(per_pixel_spectra ** 2, axis=(1, 2))
+            if per_pixel_spectra.ndim == 3:
+                if per_pixel_spectra.shape[-1] == len(freqs):
+                    if per_pixel_spectra.shape[0] != len(freqs):
+                        per_pixel_spectra = np.moveaxis(per_pixel_spectra, -1, 0)
 
-        return power_spectrum.astype(np.float64)
+            power_spectrum = np.sum(per_pixel_spectra ** 2, axis=(1, 2))
+            return power_spectrum.astype(np.float64)
 
     def compute_tension_ratio(self, power_spectrum: np.ndarray) -> float:
         """

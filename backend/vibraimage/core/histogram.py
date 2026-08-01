@@ -15,6 +15,10 @@ import numpy as np
 from typing import Dict, Tuple, Optional
 from dataclasses import dataclass
 from scipy import stats
+from backend.vibraimage.gpu_backend import (
+    get_array_module, is_gpu_available, to_gpu, to_cpu,
+    histogram, benchmark_context,
+)
 
 
 @dataclass
@@ -70,65 +74,67 @@ class FrequencyHistogram:
         self.freq_band = freq_band
         self.n_bins = n_bins
 
+    def _xp(self):
+        return get_array_module()
+
     def build(self, freq_map: np.ndarray) -> HistogramStats:
         """
         从逐像素频率图构建频率直方图并计算统计量。
-
-        Parameters
-        ----------
-        freq_map : np.ndarray, shape (H, W)
-            每个像素的主导频率 [Hz]。
-
-        Returns
-        -------
-        stats : HistogramStats
-            直方图及其统计量。
+        GPU可用时直方图和基础统计在GPU上计算。
         """
-        # 展平为1D，只保留有效频段内的像素
-        freqs = freq_map.ravel()
+        with benchmark_context("频率直方图"):
+            # 展平为1D
+            freqs = freq_map.ravel()
 
-        # 过滤无效值 (NaN, inf, 频段外)
-        valid_mask = (
-            np.isfinite(freqs) &
-            (freqs >= self.freq_band[0]) &
-            (freqs <= self.freq_band[1])
-        )
-        valid_freqs = freqs[valid_mask]
+            # 过滤无效值
+            valid_mask = (
+                np.isfinite(freqs) &
+                (freqs >= self.freq_band[0]) &
+                (freqs <= self.freq_band[1])
+            )
+            valid_freqs = freqs[valid_mask]
 
-        if len(valid_freqs) == 0:
-            return self._empty_stats()
+            if len(valid_freqs) == 0:
+                return self._empty_stats()
 
-        # 构建直方图
-        histogram, bin_edges = np.histogram(
-            valid_freqs,
-            bins=self.n_bins,
-            range=self.freq_band,
-        )
-        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
+            total_pixels = len(valid_freqs)
 
-        # 统计量
-        M = float(np.mean(valid_freqs))
-        sigma = float(np.std(valid_freqs))
-        count_max = float(np.max(histogram))
-        F_max_idx = int(np.argmax(histogram))
-        F_max = float(bin_centers[F_max_idx])
-        total_pixels = len(valid_freqs)
+            # 构建直方图（GPU helper 自动处理 torch/numpy dispatch）
+            hist, bin_edges = histogram(
+                valid_freqs, bins=self.n_bins, range=self.freq_band,
+            )
+            hist_np = to_cpu(hist) if hasattr(hist, 'cpu') else hist
+            bin_edges_np = to_cpu(bin_edges) if hasattr(bin_edges, 'cpu') else bin_edges
+            bin_centers = (bin_edges_np[:-1] + bin_edges_np[1:]) / 2.0
 
-        # 高阶矩
-        skewness = float(stats.skew(valid_freqs)) if len(valid_freqs) > 2 else 0.0
-        kurtosis = float(stats.kurtosis(valid_freqs)) if len(valid_freqs) > 2 else 0.0
+            # 统计量（GPU加速基础统计，scipy.stats仍然在CPU跑）
+            if is_gpu_available():
+                xp = self._xp()
+                g = to_gpu(valid_freqs)
+                M = float(xp.mean(g))
+                sigma = float(xp.std(g))
+                count_max = float(xp.max(hist)) if hasattr(hist, 'max') else float(np.max(hist_np))
+                F_max_idx = int(xp.argmax(hist)) if hasattr(hist, 'argmax') else int(np.argmax(hist_np))
+            else:
+                M = float(np.mean(valid_freqs))
+                sigma = float(np.std(valid_freqs))
+                count_max = float(np.max(hist_np))
+                F_max_idx = int(np.argmax(hist_np))
+
+            F_max = float(bin_centers[F_max_idx])
+
+            # 高阶矩（scipy 不支持GPU，统一转numpy）
+            valid_np = valid_freqs if isinstance(valid_freqs, np.ndarray) else to_cpu(valid_freqs)
+            skewness = float(stats.skew(valid_np)) if total_pixels > 2 else 0.0
+            kurtosis = float(stats.kurtosis(valid_np)) if total_pixels > 2 else 0.0
 
         return HistogramStats(
-            histogram=histogram,
-            bin_edges=bin_edges,
+            histogram=hist_np if isinstance(hist_np, np.ndarray) else np.asarray(hist_np),
+            bin_edges=bin_edges_np if isinstance(bin_edges_np, np.ndarray) else np.asarray(bin_edges_np),
             bin_centers=bin_centers,
-            F_max=F_max,
-            M=M,
-            sigma=sigma,
-            count_max=count_max,
-            total_pixels=total_pixels,
-            skewness=skewness,
-            kurtosis=kurtosis,
+            F_max=F_max, M=M, sigma=sigma,
+            count_max=count_max, total_pixels=total_pixels,
+            skewness=skewness, kurtosis=kurtosis,
         )
 
     def compute_normal_fit(self, hist_stats: HistogramStats) -> float:

@@ -22,20 +22,21 @@ class FaceDetector:
     """
     基于YOLOv8的头部ROI检测器。
 
-    检测视频帧中的人体(person)，裁剪头部区域。
-
     Parameters
     ----------
     model_path : str, default='yolov8n.pt'
-        YOLOv8模型路径。默认使用nano版本。
+        YOLOv8模型路径。
     roi_size : tuple, default=(224, 224)
         ROI缩放尺寸 (H, W)。
     conf_threshold : float, default=0.5
         检测置信度阈值。
     head_ratio : float, default=0.4
-        头部在人体框中的比例 (取上部head_ratio部分)。
+        头部在人体框中的比例。
     head_extend : float, default=0.3
         头部区域向下延伸的比例。
+    device : str | None
+        YOLOv8推理设备。None=自动检测，'cuda'/'cpu'/'musa'显式指定。
+        在曦云C500上可设为'cuda'利用GPU加速推理。
     """
 
     def __init__(
@@ -45,30 +46,46 @@ class FaceDetector:
         conf_threshold: float = 0.5,
         head_ratio: float = 0.4,
         head_extend: float = 0.3,
+        device: str | None = None,
     ):
         self.roi_size = roi_size
         self.conf_threshold = conf_threshold
         self.head_ratio = head_ratio
         self.head_extend = head_extend
 
+        # 设备选择：显式指定 > 环境变量 > 自动检测
+        if device is None:
+            import os
+            device = os.environ.get("YOLO_DEVICE", None)
+        self._device = device
+
         self.model = None
         self._load_model(model_path)
 
     def _load_model(self, model_path: str):
-        """延迟加载YOLO模型。"""
+        """延迟加载YOLO模型。支持GPU设备指定。"""
         try:
             from ultralytics import YOLO
+            device = self._device or self._auto_detect_device()
             self.model = YOLO(model_path)
-            logger.info(f"YOLO模型加载成功: {model_path}")
+            logger.info(f"YOLO模型加载成功: {model_path}, device={device}")
         except ImportError:
-            logger.warning(
-                "ultralytics未安装，请执行: pip install ultralytics\n"
-                "将使用Haar Cascade作为后备方案。"
-            )
+            logger.warning("ultralytics未安装，使用Haar Cascade后备")
             self._load_haar_cascade()
         except Exception as e:
             logger.warning(f"YOLO加载失败: {e}，使用Haar Cascade后备")
             self._load_haar_cascade()
+
+    @staticmethod
+    def _auto_detect_device() -> str | None:
+        """自动检测最优推理设备。"""
+        try:
+            import torch
+            if torch.cuda.is_available():
+                return "cuda"
+        except ImportError:
+            pass
+        return "cpu"
 
     def _load_haar_cascade(self):
         """加载OpenCV Haar Cascade作为后备方案。"""
@@ -97,8 +114,8 @@ class FaceDetector:
             return self._detect_haar(frame)
 
     def _detect_yolo(self, frame: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
-        """YOLOv8检测。"""
-        results = self.model(frame, verbose=False)
+        """YOLOv8检测（GPU加速，设备自动检测或从device参数指定）。"""
+        results = self.model(frame, verbose=False, device=self._device)
 
         for result in results:
             boxes = result.boxes
