@@ -15,7 +15,7 @@ import numpy as np
 from typing import Tuple, Optional
 from backend.vibraimage.gpu_backend import (
     get_array_module, is_gpu_available, to_gpu, to_cpu,
-    histogram, benchmark_context,
+    benchmark_context,
 )
 
 
@@ -72,24 +72,14 @@ class SpectralPowerDistribution:
             return np.zeros(n_bins)
 
         with benchmark_context("频谱功率"):
-            if is_gpu_available():
-                xp = self._xp()
-                freqs_g = to_gpu(freqs[valid])
-                amps_g = to_gpu(amps[valid])
-                amps_sq_g = amps_g ** 2
-                # GPU histogram with weights — histogram helper handles dispatch
-                power_spectrum, _ = histogram(
-                    freqs_g, bins=n_bins, range=self.freq_band,
-                    weights=amps_sq_g if hasattr(amps_sq_g, 'cpu') else None,
-                )
-                return to_cpu(power_spectrum).astype(np.float64)
-
+            # 加权直方图无GPU加速优势（histogram weights→CPU回退），直接用numpy
+            import numpy as _np
             freqs_valid = freqs[valid]
-            amps_sq_valid = (amps[valid] ** 2).astype(np.float64)
-            power_spectrum, _ = np.histogram(
+            amps_sq_valid = (amps[valid] ** 2).astype(_np.float64)
+            power_spectrum, _ = _np.histogram(
                 freqs_valid, bins=n_bins, range=self.freq_band, weights=amps_sq_valid,
             )
-            return power_spectrum.astype(np.float64)
+            return power_spectrum.astype(_np.float64)
 
     def compute_from_spectra(
         self,

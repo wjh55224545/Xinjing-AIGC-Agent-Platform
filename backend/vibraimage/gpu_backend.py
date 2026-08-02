@@ -191,14 +191,18 @@ def rfft(x, axis=0):
 
 
 def rfftfreq(n, d=1.0):
-    """兼容 torch/numpy 的FFT频率轴。"""
+    """兼容 torch/numpy 的FFT频率轴。GPU可用时返回GPU tensor。"""
     xp = get_array_module()
     if xp.__name__ == 'numpy':
         import numpy as np
         return np.fft.rfftfreq(n, d=d)
     else:
         import torch
-        return torch.fft.rfftfreq(n, d=d)
+        result = torch.fft.rfftfreq(n, d=d)
+        # torch.fft.rfftfreq 默认返回CPU tensor，需手动转移到GPU
+        if is_gpu_available():
+            result = result.cuda()
+        return result
 
 
 @contextmanager

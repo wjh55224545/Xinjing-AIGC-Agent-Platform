@@ -36,11 +36,13 @@
 
 ## 📖 项目简介
 
-**心镜**是一个部署在智慧教室环境中的AIGC智能体系统。平台以**沐曦MetaX GPU国产算力**为底座，搭载**moark.com 平台 Lingshu-32B 大模型**作为核心推理引擎，集成**VibraImage前庭振动识别引擎**（Viktor Minkin专著公式体系），通过**5智能体协作架构**，实现从双模态情绪感知到AIGC心理内容生成的全流程智能化。
+**心镜**是一个部署在智慧教室环境中的AIGC智能体系统。平台以**沐曦MetaX GPU国产算力**为底座，搭载**moark.com 平台 Lingshu-32B 大模型**作为核心推理引擎，集成**VibraImage前庭振动识别引擎**（Viktor Minkin专著公式体系），通过**5智能体LLM驱动协作架构**，实现从双模态情绪感知到AIGC心理内容生成的全流程智能化。
+
+**VibraImage引擎已完整适配曦云C500 GPU**，帧差分、FFT频率分析、直方图构建等计算密集型模块均通过PyTorch MUSA后端在GPU上执行。实测全流水线端到端加速比达 **14.06x**，GPU优势项平均加速 **6.96x**，验证了国产GPU在智能体计算场景下的巨大潜力。
 
 ### 一句话理解
 
-**教室里的"情绪CT机" + "AI心理报告生成器"——沐曦GPU驱动，moark.com Lingshu-32B大模型推理，VibraImage振动分析，多Agent协作，全流程AIGC。**
+**教室里的"情绪CT机" + "AI心理报告生成器"——沐曦GPU双轨驱动（曦云C500本地加速 + moark.com云端推理），Lingshu-32B大模型，VibraImage振动分析，多Agent LLM协作，全流程AIGC。**
 
 ---
 
@@ -48,10 +50,10 @@
 
 | 赛道要求 | 本项目实现 |
 |---------|-----------|
-| 基于国产算力平台 | ✅ 沐曦MetaX GPU + moark.com Lingshu-32B 大模型，全链路国产化 |
+| 基于国产算力平台 | ✅ 沐曦MetaX GPU 双轨：曦云C500本地GPU加速(VibraImage 14.06x端到端加速比) + moark.com Lingshu-32B云端推理，全链路国产化 |
 | AIGC能力 | ✅ Lingshu-32B 大模型驱动：心理报告、干预方案、家校沟通函、成长叙事（LLM直接生成，不可用时自动降级模板） |
 | 多Agent协作 | ✅ 5智能体（感知→分析→报告→预警→协调），Lingshu-32B ReAct推理 |
-| 产品化落地 | ✅ Web前后端 + Docker + API文档 + 56项测试全通过 |
+| 产品化落地 | ✅ Web前后端 + Docker + API文档 + 曦云C500 GPU基准测试 |
 | 开源合规 | ✅ Apache 2.0 License，完整文档 |
 
 ---
@@ -75,9 +77,31 @@
 
 ### 🔬 VibraImage前庭振动引擎 ★
 - 基于Viktor Minkin "Vibraimage, Cybernetics and Emotions" (2020)专著
-- 全链路：YOLOv8人脸检测 → 帧差分 → 频率分析 → E1-E12情绪参数 → K值
+- 全链路：YOLOv8人脸检测(GPU加速) → 帧差分(GPU) → 频率分析(GPU) → E1-E12情绪参数 → K值
+- 已适配**曦云C500 GPU**（PyTorch MUSA后端），计算密集型模块全GPU执行
 - E1-E12白盒算法，每个参数有明确物理含义，非黑盒神经网络
 - 10,266人常模数据库，K值心理状态量化指标
+
+### 🔥 曦云C500 GPU加速 ★
+
+**VibraImage引擎已完整适配曦云C500 GPU**，帧差分、FFT频率分析、直方图构建、YOLOv8推理等计算密集型模块通过PyTorch MUSA后端在GPU上执行。系统启动时自动探测GPU（优先级：MUSA → CUDA → CPU fallback），无需手动配置。
+
+在曦云C500云GPU实例上的实测基准（测试视频：100帧×224×224灰度ROI）：
+
+| 测试项 | CPU耗时 (ms) | GPU耗时 (ms) | 加速比 |
+|--------|-------------|-------------|--------|
+| 帧差分 (100×224×224) | 7.32 | 1.53 | **4.79x** |
+| FFT (100×224×224) | 45.56 | 6.61 | **6.89x** |
+| 频率直方图 | 0.79 | 0.13 | **6.14x** |
+| YOLOv8推理 (10帧) | 849.83 | 293.32 | **2.90x** |
+| 全流水线端到端 | 91.26 | 6.49 | **14.06x** |
+
+- **GPU**: MetaX C500, 15584 MB 显存
+- **平均加速比（全6项）**: **5.80x**
+- **GPU优势项加权平均**: **6.96x**
+- 空间分析保持CPU执行（逐行Python for循环的GPU搬运开销远超计算收益，这是正确的设计决策）
+
+详细基准报告：[data/benchmark_c500.md](data/benchmark_c500.md) | 基准脚本：[scripts/c500/benchmark.py](scripts/c500/benchmark.py)
 
 ### 👁️ 双模态情绪识别
 - **面部图像分析**：OpenCV Haar Cascade 人脸检测 + 面部区域像素特征提取（嘴部曲率/眼部开度/眉毛位置/对称性）
@@ -145,7 +169,7 @@
 1. 情绪概况段落（自然语言描述）
 2. 5项关键指标表格（综合评分/情绪稳定性/积极情绪占比/负面情绪占比/情绪趋势）
 3. 关键发现（情绪突变检测、主导情绪、情绪波动等）
-4. 风险分析（基于12项指标和LSTM-Transformer预测）
+4. 风险分析（基于统计指标和Lingshu-32B大模型综合分析）
 5. 明日预测（95%置信区间）
 6. 个性化建议措施
 
@@ -170,17 +194,27 @@
 | 平台适配器 | 7 | 100% | 灵枢/DeepSeek/本地平台初始化、Fallback |
 | AIGC生成器 | 10 | 100% | 报告/方案/沟通函/叙事生成与格式验证 |
 | 多智能体 | 9 | 100% | 智能体初始化、ReAct流程、工具调用 |
-| 状态机端到端 | 30 | 100% | 内环/外环完整流程、SSE事件推送 |
-| **合计** | **56** | **100%** | **全模块覆盖** |
+| **合计** | **26** | **100%** | **全模块覆盖** |
 
 ```bash
 # 运行全部测试
 python -m pytest tests/ -v
 
 # 预期输出
-# tests/test_platform_adapter.py::test_xxxx PASSED  [ 1/56]
+# tests/test_platform_adapter.py::test_xxxx PASSED  [ 1/26]
 # ...
-# ==================== 56 passed in 2.34s ====================
+# ==================== 26 passed in 2.34s ====================
+```
+
+### 曦云C500 GPU基准测试（★ 比赛关键材料）
+
+```bash
+# 在曦云C500云GPU实例上运行
+python scripts/c500/benchmark.py --output data/benchmark_c500.json
+python scripts/c500/benchmark_report.py data/benchmark_c500.json --output data/benchmark_c500.md
+
+# 产出: CPU vs GPU 全流水线对比数据
+# 平均加速比 5.8x | GPU优势项加权平均 6.96x | 端到端 14.06x
 ```
 
 ### 管理 API（阶段三新增）
@@ -310,7 +344,8 @@ python -m pytest tests/ -v
 | 智能体 | `POST /api/agents/trigger/inner` | 触发情绪采集 |
 | 智能体 | `POST /api/agents/trigger/outer` | 触发每日分析 |
 | **VibraImage** | `GET /api/vibraimage/health` | **引擎状态检查 ★** |
-| **VibraImage** | `POST /api/vibraimage/analyze` | **视频振动分析 ★** |
+| **VibraImage** | `POST /api/vibraimage/analyze` | **视频振动分析 (GPU加速) ★** |
+| **GPU** | `GET /api/gpu/status` | **GPU算力状态查询 ★** |
 
 ---
 
@@ -429,26 +464,33 @@ curl http://localhost:8000/api/agents/platform
 ```
 心镜AIGC智能体平台/
 ├── backend/
-│   ├── agents/              # 5智能体（灵枢ReAct推理）
-│   ├── aigc/                # AIGC引擎（灵枢驱动生成）
-│   ├── vibraimage/          # ★ VibraImage前庭振动引擎（18个文件）
-│   │   ├── pipeline/        #    主引擎 + YOLOv8人脸检测
-│   │   ├── core/            #    帧差分/频率分析/直方图/空间/频谱
+│   ├── agents/              # 5智能体（Lingshu-32B驱动LLM协作）
+│   ├── aigc/                # AIGC引擎（Lingshu-32B直接生成）
+│   ├── vibraimage/          # ★ VibraImage前庭振动引擎（GPU加速）
+│   │   ├── pipeline/        #    主引擎 + YOLOv8人脸检测(GPU)
+│   │   ├── core/            #    帧差分(GPU)/频率分析(GPU)/直方图(GPU)
 │   │   ├── emotions/        #    E1-E12参数 + K值计算
-│   │   └── utils/           #    10,266人常模数据
+│   │   ├── utils/           #    10,266人常模数据
+│   │   └── gpu_backend.py   #    GPU适配层(PyTorch MUSA/CUDA→NumPy)
+│   ├── gpu/                 # GPU检测 + 状态API
 │   ├── llm/                 # AI平台适配层（moark/DeepSeek/本地）
-│   ├── graph/               # LangGraph双环状态机
-│   ├── tools/               # 情绪识别/VibraImage/心理分析/反馈/OBS
-│   ├── api/routes/          # REST API（含VibraImage端点）
+│   ├── tools/               # 情绪识别/VibraImage/数据预处理/反馈/OBS
+│   ├── api/routes/          # REST API（含VibraImage + GPU端点）
 │   ├── models/              # ORM（含VibraImage E1-E12字段）
-│   └── main.py              # FastAPI入口
+│   └── main.py              # FastAPI入口（含GPU检测启动日志）
 ├── data/
-│   └── yolov8n.pt           # ★ YOLOv8n人脸检测模型
+│   ├── yolov8n.pt           # ★ YOLOv8n人脸检测模型
+│   └── benchmark_c500.md    # ★ 曦云C500 GPU基准测试报告
+├── scripts/c500/            # ★ 曦云C500部署+基准测试脚本
+│   ├── deploy.sh
+│   ├── benchmark.py         #    CPU vs GPU全流水线对比
+│   ├── benchmark_report.py  #    生成Markdown对比报告
+│   └── README.md
 ├── frontend/                # Vue 3 前端
-├── tests/                   # 56项测试
+├── tests/                   # 26项测试
 ├── docker-compose.yml
-├── .env.template            # 环境变量模板（含灵枢配置）
-├── requirements.txt         # 含opencv/scipy/ultralytics
+├── .env.template
+├── requirements.txt         # 含torch/opencv/scipy/ultralytics
 └── README.md
 ```
 
@@ -458,10 +500,11 @@ curl http://localhost:8000/api/agents/platform
 
 | 层级 | 技术 | 说明 |
 |------|------|------|
-| **主推理引擎** | **moark.com Lingshu-32B** | **沐曦GPU · OpenAI兼容API ★** |
+| **GPU算力** | **曦云C500 (沐曦MetaX)** | **本地GPU加速，PyTorch MUSA后端 ★** |
+| **主推理引擎** | **moark.com Lingshu-32B** | **沐曦GPU云端推理 · OpenAI兼容API ★** |
 | 备用推理 | DeepSeek | 自动Fallback |
-| 前庭振动 | VibraImage + YOLOv8n | Minkin专著公式体系 ★ |
-| 后端 | FastAPI + LangGraph | 异步Web + AI编排 |
+| 前庭振动 | VibraImage + YOLOv8n | Minkin专著公式体系 + GPU加速 ★ |
+| 后端 | FastAPI + LangChain | 异步Web + LLM Agent编排 |
 | 前端 | Vue 3 + Vite + ECharts | 响应式仪表盘 |
 | 数据库 | SQLite + SQLAlchemy | 轻量级ORM |
 | 部署 | Docker + docker-compose | 一键部署 |
@@ -471,18 +514,32 @@ curl http://localhost:8000/api/agents/platform
 
 ## 🖥️ 使用的模型与算力环境
 
+### 云端推理（LLM）
+
 | 项目 | 详情 |
 |------|------|
 | **主推理模型** | Lingshu-32B（灵枢32B医疗大模型） |
 | **API 端点** | `https://api.moark.com/v1`（OpenAI 兼容协议） |
 | **调用方式** | `ExtraBodyChatOpenAI` 子类适配，参数：`top_k=-1, top_p=1.0, frequency_penalty=0.0` |
 | **GPU 算力** | 沐曦 MetaX GPU（moark.com 平台托管推理） |
-| **国产化** | 全链路国产：沐曦GPU → moark.com → Lingshu-32B |
 | **备用方案** | DeepSeek（自动 Fallback） |
-| **本地模型** | YOLOv8n 人脸检测（ultralytics）、Haar Cascade 后备 |
-| **推理框架** | LangChain 0.3.13 + LangGraph 0.2.60 |
+| **推理框架** | LangChain + prompt-based ReAct Agent |
 | **平均延迟** | 2.35s（5次实测取平均，prompt="ping" / max_tokens=32） |
 | **成功率** | 100%（5/5 实测） |
+
+### 本地GPU加速（VibraImage引擎）
+
+| 项目 | 详情 |
+|------|------|
+| **GPU 型号** | **曦云C500（MetaX C500）★** |
+| **显存** | 15584 MB |
+| **计算后端** | PyTorch + MUSA（沐曦加速架构） |
+| **GPU加速模块** | 帧差分（4.79x）、FFT频率分析（6.89x）、频率直方图（6.14x）、YOLOv8推理（2.90x） |
+| **端到端加速比** | **14.06x**（全流水线） |
+| **GPU优势项平均** | **6.96x**（排除CPU-optimal的空间分析） |
+| **CPU fallback** | 自动。`VIBRAIMAGE_GPU_BACKEND=numpy` 可强制CPU模式 |
+| **GPU检测** | 启动时自动打印GPU型号+显存，`GET /api/gpu/status` 可查询 |
+| **国产化** | 全链路国产：曦云C500(MetaX)本地加速 + moark.com(MetaX)云端推理 → Lingshu-32B |
 
 ---
 
@@ -577,9 +634,10 @@ curl http://localhost:8000/api/agents/platform
 
 ### 功能设计与开发计划
 
-1. **阶段一（基础架构）**：搭建 FastAPI + LangGraph 双环状态机 → 5 智能体 ReAct 协作 → 前端仪表盘 → Docker 部署，完成 56 项自动化测试
+1. **阶段一（基础架构）**：搭建 FastAPI + 多点协作流程 → 5 智能体 ReAct 协作 → 前端仪表盘 → Docker 部署
 2. **阶段二（AIGC 集成）**：接入 moark.com Lingshu-32B 真实 LLM → AIGC 生成器 LLM 优先 + 模板降级双轨 → prompt-based ReAct Agent（灵枢不支持 function calling）
 3. **阶段三（产品化交付）**：API 日志 + 限流中间件 + 管理 API → CloudBase 云部署适配 → 用户反馈收集 → 文档完善
+4. **阶段四（GPU深度整合）**：架构统一（删除冗余graph/，LLM驱动的多Agent协作成为唯一路径）→ VibraImage引擎PyTorch MUSA GPU加速 → 曦云C500基准测试（端到端14.06x加速比）→ 概念去伪存真（删除占位假数据，如实呈现技术实现）
 
 ### 模型接口调用问题与解决
 
@@ -598,6 +656,7 @@ curl http://localhost:8000/api/agents/platform
 | v2.0.1 | `platform_adapter.py` 从 `os.getenv` 改为 pydantic Settings 读取 `.env`，修复 Agent 读取不到灵枢配置的 bug |
 | v2.1.0 | 新增 3 个中间件（API 日志/限流/CORS）+ 7 个管理端点 + 用户反馈浮窗 + 前后端合并 Dockerfile |
 | v2.2.0 | 合并 L2 情绪映射层 + 短视频容错 + VibraImage v0.2.0 + 面部识别真实化（OpenCV 像素处理替代 random stub） |
+| **v2.3.0** | **GPU深度整合：架构统一(LLM驱动多Agent协作)、VibraImage GPU加速(PyTorch MUSA/CUDA→NumPy fallback)、曦云C500基准测试(端到端14.06x)、GPU状态API、概念去伪存真** |
 
 ### 技术难点与解决方案
 
@@ -608,6 +667,8 @@ curl http://localhost:8000/api/agents/platform
 | **合成视频人脸检测困难** | 三重级联容错：Haar Cascade `default+alt+alt2` 三文件尝试 → 失败则边缘检测+椭圆拟合寻找人脸轮廓 → 无人脸时返回 `"未检测到人脸"` 而非随机数据 |
 | **真实视频双模态融合验证** | 用真人面部视频（10秒 happy + 9秒 neutral）实测发现：面部规则系统在真实光照/角度下误判 happy 为"愤怒"（mouth_curve 受光照影响），但 VibraImage 前庭振动侧输出正性效价，加权融合后最终情绪为"开心"——**双模态互补价值被验证**，单一模态不可靠但融合结果正确 |
 | **L2 情绪映射权重初始值** | 基于 VCE 专著各参数心理学语义设定初始权重矩阵，通过 `calibrate.py` + Pearson 相关系数支持标注数据校正 |
+| **VibraImage NumPy→GPU迁移** | CuPy与沐曦MACA兼容性不确定 → 改用PyTorch MUSA后端（云实例预装），实现detect_gpu()自动探测链（MUSA→CUDA→CPU），核心模块零改动API切换（`xp = get_array_module()`）。空间分析保持CPU执行因逐行for循环GPU搬运开销远大计算收益 |
+| **曦云C500基准测试** | 通过SSH部署 + benchmark.py自动对比全流水线6项指标（每个测3次取平均），验证FFT(6.89x)和端到端(14.06x)加速最显著，空间分析(0.05x)验证了CPU-optimal判断正确 |
 
 ---
 
@@ -615,6 +676,8 @@ curl http://localhost:8000/api/agents/platform
 >
 > **任务**: 任务三 - 基于国产算力平台的AIGC与智能体开发与应用
 >
-> **算力支持**: 沐曦MetaX GPU + moark.com Lingshu-32B 大模型
+> **算力支持**: 曦云C500 (MetaX) 本地GPU加速 + moark.com (MetaX) Lingshu-32B 云端推理
+>
+> **版本**: v2.3.0 — GPU深度整合，VibraImage全流水线GPU加速(端到端14.06x)
 >
 > **开源地址**: [GitHub](https://github.com/wjh55224545/Xinjing-AIGC-Agent-Platform) | [GitLink](https://www.gitlink.org.cn/w55224545/Xinjing-AIGC-Agent-Platform)
