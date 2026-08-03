@@ -114,6 +114,13 @@
 - ✉️ 家校沟通函（三级措辞，温和不引起恐慌）
 - 📈 学生成长叙事
 
+### 🧬 Agent 自进化引擎 ★
+- **反馈驱动进化**：每次 AIGC 生成后自动记录经验（学生数据 + 生成结果 + 用户评分），构建经验库
+- **历史成功案例注入**：Agent 生成时自动检索同类别 ≥4 分历史案例，注入 prompt 指导生成
+- **评分趋势追踪**：`GET /api/admin/stats/evolution` — 累积经验数、平均评分、评分趋势（上升/下降/持平）
+- **低分自动标记**：用户反馈评分 ≤2 时自动记录为负面经验，避免重复错误模式
+- **零外部依赖**，仅 JSONL 文件 + prompt 注入实现，不修改模型权重
+
 ### 🚨 三级预警系统
 - 🟢 绿色：看板 + APP推送
 - 🟡 黄色：+ 微信班主任通知
@@ -225,6 +232,7 @@ python scripts/c500/benchmark_report.py data/benchmark_c500.json --output data/b
 | `GET` | `/api/admin/stats/llm` | LLM 调用统计 |
 | `GET` | `/api/admin/stats/logs` | API 调用日志查询 |
 | `GET` | `/api/admin/health/detail` | 深度健康检查（DB + LLM + VibraImage） |
+| `GET` | `/api/admin/stats/evolution` | **自进化统计（★ 阶段四新增）** |
 | `GET` | `/api/admin/export` | 导出运营数据 CSV |
 
 ### 中文API文档

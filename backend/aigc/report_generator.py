@@ -55,6 +55,13 @@ class ReportGenerator:
         # ---- 优先尝试 LLM 生成 ----
         llm_text = self._try_llm_generate(name, report_date, data, analysis)
         if llm_text:
+            # ---- 自进化：记录 LLM 生成经验 ----
+            try:
+                from backend.evolution.memory import record_experience
+                record_experience("daily_report", name, llm_text)
+            except Exception:
+                pass
+
             return {
                 "report_type": "daily",
                 "student_name": student_name,
@@ -83,6 +90,13 @@ class ReportGenerator:
         next_day_prediction = self._generate_prediction(llm_prediction)
         suggestions = self._format_suggestions(analysis.get("suggestions", []))
         key_findings = self._generate_key_findings(data, analysis)
+
+        # ---- 自进化：记录经验 ----
+        try:
+            from backend.evolution.memory import record_experience
+            record_experience("daily_report", name, report_text[:300] if report_text else "")
+        except Exception:
+            pass
 
         report_text = DAILY_REPORT_TEMPLATE.format(
             student_name=name,
@@ -141,6 +155,15 @@ class ReportGenerator:
             "请使用专业的心理学语言，同时保持报告对教师和家长友好可读。"
             "用 Markdown 格式输出结构化报告，适当使用 emoji 增强可读性。"
         )
+
+        # ---- 自进化：注入历史成功案例 ----
+        try:
+            from backend.evolution.memory import build_evolution_context
+            evo_ctx = build_evolution_context("daily_report")
+            if evo_ctx:
+                system_prompt += "\n" + evo_ctx
+        except Exception:
+            pass
 
         user_prompt = f"""请为 {student_name} 同学生成 {date} 的心理健康评估日报。
 

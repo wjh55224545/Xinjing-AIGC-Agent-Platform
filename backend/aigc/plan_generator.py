@@ -62,6 +62,10 @@ class PlanGenerator:
         # ---- 优先尝试 LLM 生成 ----
         llm_text = self._try_llm_generate(name, risk_level, factors, ind, plan_id)
         if llm_text:
+            try:
+                from backend.evolution.memory import record_experience
+                record_experience("intervention_plan", name, llm_text)
+            except Exception: pass
             return {
                 "plan_type": "intervention",
                 "student_name": student_name,
@@ -122,6 +126,13 @@ class PlanGenerator:
             "你是一位资深的学校心理健康教育专家，负责为学生制定个性化心理干预方案。"
             "请用中文撰写，语言专业、具体、可操作。使用 Markdown 格式。"
         )
+
+        # ---- 自进化 ----
+        try:
+            from backend.evolution.memory import build_evolution_context
+            evo = build_evolution_context("intervention_plan")
+            if evo: system_prompt += "\n" + evo
+        except Exception: pass
 
         user_prompt = f"""请为 {student_name} 同学生成个性化心理干预方案。
 

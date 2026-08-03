@@ -59,6 +59,10 @@ class LetterGenerator:
         # ---- 优先尝试 LLM 生成 ----
         llm_text = self._try_llm_generate(name, class_name, emotion_summary, risk_level, suggs, teacher, phone)
         if llm_text:
+            try:
+                from backend.evolution.memory import record_experience
+                record_experience("parent_letter", name, llm_text)
+            except Exception: pass
             return {
                 "letter_type": risk_level,
                 "student_name": student_name,
@@ -137,6 +141,12 @@ class LetterGenerator:
             "你是一位经验丰富的班主任老师，需要向家长发送学生心理状态沟通函。"
             "语气必须温和、专业、不引起恐慌，同时传达必要的关注信息。"
         )
+
+        try:
+            from backend.evolution.memory import build_evolution_context
+            evo = build_evolution_context("parent_letter")
+            if evo: system_prompt += "\n" + evo
+        except Exception: pass
 
         user_prompt = f"""请为 {student_name}{class_name if class_name else ''}的家长撰写一封家校沟通函。
 

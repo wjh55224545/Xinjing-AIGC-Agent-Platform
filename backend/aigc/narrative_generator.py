@@ -47,6 +47,10 @@ class NarrativeGenerator:
         # ---- 优先尝试 LLM 生成 ----
         llm_text = self._try_llm_generate(name, period_days, start_str, end_str, data)
         if llm_text:
+            try:
+                from backend.evolution.memory import record_experience
+                record_experience("growth_narrative", name, llm_text)
+            except Exception: pass
             return {
                 "narrative_type": "growth",
                 "student_name": student_name,
@@ -96,6 +100,12 @@ class NarrativeGenerator:
             "你是一位温暖而有洞察力的学校心理老师，负责为学生撰写心理成长叙事。"
             "请用温暖、鼓励、充满希望的笔触写作，记录学生的成长历程。"
         )
+
+        try:
+            from backend.evolution.memory import build_evolution_context
+            evo = build_evolution_context("growth_narrative")
+            if evo: system_prompt += "\n" + evo
+        except Exception: pass
 
         user_prompt = f"""请为 {student_name} 同学撰写一段心理成长叙事。
 

@@ -38,6 +38,14 @@ async def submit_feedback(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"保存反馈失败: {e}")
 
+    # ---- 联动自进化引擎：低分反馈标记为负面经验 ----
+    if rating <= 2:
+        try:
+            from backend.evolution.memory import record_experience
+            record_experience("user_feedback", "匿名用户", content, rating=rating, feedback=content)
+        except Exception:
+            pass
+
     return {"success": True, "message": "感谢您的反馈！"}
 
 
@@ -158,6 +166,17 @@ async def health_detail():
 
 
 # ---- 数据导出 ----
+
+@router.get("/stats/evolution", summary="获取自进化统计")
+async def get_evolution():
+    """返回自进化引擎的累积经验数、评分趋势、高评分案例。"""
+    try:
+        from backend.evolution.memory import get_evolution_stats
+        stats = get_evolution_stats()
+        return {"success": True, "data": stats}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 
 @router.get("/export", summary="导出运营数据 CSV")
 async def export_data(
