@@ -50,6 +50,8 @@ logs/
 docs/vibraimage-reference/
 
 # Node
+node_modules/
 frontend/node_modules/
 frontend/dist/
 /static/
+package-lock.json

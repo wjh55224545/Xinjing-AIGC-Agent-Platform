@@ -1,0 +1,28 @@
+{
+  "name": "xinjing-aigc-agent-platform",
+  "version": "1.0.0",
+  "description": "> 🏆 **第八届CCF开源创新大赛 · 国产开源GPU AI创新生态赛 任务三**\r >\r > 沐曦MetaX GPU国产算力 · Lingshu-32B大模型 · VibraImage前庭振动 · 多智能体AIGC协作\r >\r > 📦 **阶段三**: 产品化部署 | 运营数据收集 | 开源至 GitLink | [部署指南](DEPLOY.md)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wukaijia915-hub/Xinjing-AIGC-Agent-Platform.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/wukaijia915-hub/Xinjing-AIGC-Agent-Platform/issues"
+  },
+  "homepage": "https://github.com/wukaijia915-hub/Xinjing-AIGC-Agent-Platform#readme",
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
+  }
+}
