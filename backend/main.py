@@ -315,6 +315,8 @@ from backend.api.routes.admin import router as admin_router
 from backend.api.routes.fusion import router as fusion_router
 from backend.api.routes.virtual_subject import router as virtual_subject_router
 from backend.api.routes.emotion_forecast import router as emotion_forecast_router
+from backend.api.routes.risk_assessment import router as risk_assessment_router
+from backend.api.routes.classic_experiments import router as classic_experiments_router
 
 app.include_router(upload_router, prefix="/api")
 app.include_router(sse_router, prefix="/api")
@@ -329,6 +331,8 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(fusion_router, prefix="/api")
 app.include_router(virtual_subject_router, prefix="/api")
 app.include_router(emotion_forecast_router, prefix="/api")
+app.include_router(risk_assessment_router, prefix="/api")
+app.include_router(classic_experiments_router, prefix="/api")
 
 # 注册 GPU 状态 API
 from backend.gpu import register_gpu_routes

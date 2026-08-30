@@ -1,0 +1,25 @@
+{
+  "code": "GAD-7",
+  "name": "广泛性焦虑障碍量表",
+  "description": "GAD-7（Generalized Anxiety Disorder-7）是临床上最常用的焦虑筛查工具，由 Spitzer 等人于 2006 年开发，用于评估个体近两周的焦虑症状严重程度。7 个条目对应 DSM-IV 广泛性焦虑障碍的核心症状，4 点计分（0-3），总分 0-21。条目来源：Spitzer, R. L., Kroenke, K., Williams, J. B., & Löwe, B. (2006). A brief measure for assessing generalized anxiety disorder: the GAD-7. Archives of Internal Medicine, 166(10), 1092-1097.",
+  "source": "Spitzer, Kroenke, Williams & Löwe (2006). Arch Intern Med, 166(10), 1092-1097.",
+  "questions_count": 7,
+  "questions": [
+    {"id": 1, "text": "感觉紧张、焦虑或急切", "irt": {"a": 1.3, "b": -0.6, "c": 0.05}},
+    {"id": 2, "text": "不能停止或控制担忧", "irt": {"a": 1.4, "b": -0.3, "c": 0.05}},
+    {"id": 3, "text": "对各种各样的事情担忧过多", "irt": {"a": 1.3, "b": -0.1, "c": 0.05}},
+    {"id": 4, "text": "很难放松下来", "irt": {"a": 1.2, "b": 0.1, "c": 0.05}},
+    {"id": 5, "text": "由于不安而无法静坐", "irt": {"a": 1.1, "b": 0.4, "c": 0.05}},
+    {"id": 6, "text": "变得容易烦恼或急躁", "irt": {"a": 1.0, "b": 0.2, "c": 0.05}},
+    {"id": 7, "text": "感到似乎将有可怕的事情发生而害怕", "irt": {"a": 1.4, "b": 0.6, "c": 0.05}}
+  ],
+  "scoring": {
+    "base": 0,
+    "labels": ["完全不会", "好几天", "一半以上的天数", "几乎每天"],
+    "options": [0, 1, 2, 3],
+    "reverse_items": [],
+    "standard_score_formula": "raw",
+    "cutoff": {"normal": [0, 4], "mild": [5, 9], "moderate": [10, 14], "severe": [15, 21]},
+    "note": "总分 0-4 无焦虑，5-9 轻度焦虑，10-14 中度焦虑，15-21 重度焦虑。GAD-7 是临床焦虑筛查的金标准工具，灵敏度89%，特异度82%。GAD-7 同时可用于筛查惊恐障碍、社交焦虑障碍和创伤后应激障碍。"
+  }
+}

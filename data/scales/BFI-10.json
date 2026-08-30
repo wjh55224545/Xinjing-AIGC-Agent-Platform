@@ -1,0 +1,35 @@
+{
+  "code": "BFI-10",
+  "name": "大五人格量表简版",
+  "description": "BFI-10（Big Five Inventory-10）是大五人格量表的10题简版，由 Rammstedt 和 John 于 2007 年开发，用于快速评估人格的五个维度：外向性（Extraversion）、宜人性（Agreeableness）、尽责性（Conscientiousness）、神经质（Neuroticism）、开放性（Openness）。每个维度2题，5点计分，总分各维度1-5。条目来源：Rammstedt, B., & John, O. P. (2007). Measuring personality in one minute or less: A simple 10-item version of the Big Five Inventory. Journal of Research in Personality, 41(1), 203-212.",
+  "source": "Rammstedt & John (2007). J Res Pers, 41(1), 203-212.",
+  "questions_count": 10,
+  "questions": [
+    {"id": 1, "text": "我是一个外向、善于社交的人", "irt": {"a": 1.0, "b": 0.0, "c": 0.05}, "dimension": "extraversion"},
+    {"id": 2, "text": "我倾向于批评他人、挑毛病", "irt": {"a": 0.9, "b": 0.2, "c": 0.05}, "dimension": "agreeableness"},
+    {"id": 3, "text": "我是一个可靠的、自律的人", "irt": {"a": 1.1, "b": -0.3, "c": 0.05}, "dimension": "conscientiousness"},
+    {"id": 4, "text": "我容易紧张、焦虑", "irt": {"a": 1.2, "b": 0.1, "c": 0.05}, "dimension": "neuroticism"},
+    {"id": 5, "text": "我对新事物、新体验持开放态度", "irt": {"a": 1.0, "b": -0.1, "c": 0.05}, "dimension": "openness"},
+    {"id": 6, "text": "我是一个安静、内向的人", "irt": {"a": 1.0, "b": 0.1, "c": 0.05}, "dimension": "extraversion"},
+    {"id": 7, "text": "我通常信任他人、乐于助人", "irt": {"a": 0.9, "b": -0.2, "c": 0.05}, "dimension": "agreeableness"},
+    {"id": 8, "text": "我有时会偷懒、不负责任", "irt": {"a": 1.0, "b": 0.3, "c": 0.05}, "dimension": "conscientiousness"},
+    {"id": 9, "text": "我通常情绪稳定、不易激动", "irt": {"a": 1.1, "b": -0.2, "c": 0.05}, "dimension": "neuroticism"},
+    {"id": 10, "text": "我对艺术、审美不太感兴趣", "irt": {"a": 0.9, "b": 0.4, "c": 0.05}, "dimension": "openness"}
+  ],
+  "scoring": {
+    "base": 1,
+    "labels": ["非常不同意", "不同意", "中立", "同意", "非常同意"],
+    "options": [1, 2, 3, 4, 5],
+    "reverse_items": [2, 6, 8, 9, 10],
+    "standard_score_formula": "raw",
+    "dimensions": {
+      "extraversion": {"name": "外向性", "items": [1, 6], "reverse": [6]},
+      "agreeableness": {"name": "宜人性", "items": [2, 7], "reverse": [2]},
+      "conscientiousness": {"name": "尽责性", "items": [3, 8], "reverse": [8]},
+      "neuroticism": {"name": "神经质", "items": [4, 9], "reverse": [9]},
+      "openness": {"name": "开放性", "items": [5, 10], "reverse": [10]}
+    },
+    "cutoff": {"low": [1, 2.5], "medium": [2.5, 3.5], "high": [3.5, 5]},
+    "note": "每个维度得分1-5分，<2.5为低分，2.5-3.5为中等，>3.5为高分。反向题：2(宜人)、6(外向)、8(尽责)、9(神经质)、10(开放)。BFI-10 与完整版 BFI-44 的相关系数为0.83-0.94，可用于快速人格评估。大五人格是心理学中最成熟的人格模型，广泛应用于临床、组织、教育心理学。"
+  }
+}
