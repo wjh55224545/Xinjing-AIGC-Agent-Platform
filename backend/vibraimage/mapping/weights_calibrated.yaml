@@ -1,0 +1,157 @@
+weights:
+  valence:
+    aggression: -0.8622
+    stress: -0.8435
+    tension: -0.8457
+    suspicious: -0.2741
+    balance: 0.7734
+    charm: 0.7465
+    energy: 0.6465
+    self_regulation: 0.7656
+    inhibition: 0.0166
+    neuroticism: -0.1258
+    depression: -0.8467
+    happiness: 0.9481
+  arousal:
+    aggression: 0.5438
+    stress: 0.6178
+    tension: 0.5431
+    suspicious: 0.3129
+    balance: -0.3467
+    charm: -0.0894
+    energy: 0.1944
+    self_regulation: -0.4464
+    inhibition: -0.2456
+    neuroticism: 0.5214
+    depression: -0.0722
+    happiness: -0.1163
+normalization:
+  aggression:
+  - 18.0
+  - 63.0
+  stress:
+  - 9.0
+  - 54.0
+  tension:
+  - 5.0
+  - 56.0
+  suspicious:
+  - 9.0
+  - 47.0
+  balance:
+  - 30.0
+  - 93.0
+  charm:
+  - 17.0
+  - 96.0
+  energy:
+  - 2.0
+  - 90.0
+  self_regulation:
+  - 12.0
+  - 98.0
+  inhibition:
+  - 0.0
+  - 59.0
+  neuroticism:
+  - 0.0
+  - 70.0
+  depression:
+  - 7.0
+  - 55.0
+  happiness:
+  - 21.0
+  - 79.0
+emotion_regions:
+  calm_relaxed:
+    valence:
+    - 0.48
+    - 0.96
+    arousal:
+    - 0.06
+    - 0.42
+    label: 平静/放松
+    label_en: calm_relaxed
+  angry_irritable:
+    valence:
+    - 0.0
+    - 0.24
+    arousal:
+    - 0.78
+    - 0.98
+    label: 愤怒/烦躁
+    label_en: angry_irritable
+  anxious_worried:
+    valence:
+    - 0.0
+    - 0.44
+    arousal:
+    - 0.56
+    - 0.84
+    label: 焦虑/担忧
+    label_en: anxious_worried
+  nervous_uneasy:
+    valence:
+    - 0.02
+    - 0.48
+    arousal:
+    - 0.38
+    - 0.66
+    label: 紧张/不安
+    label_en: nervous_uneasy
+  sad_low:
+    valence:
+    - 0.0
+    - 0.36
+    arousal:
+    - 0.32
+    - 0.44
+    label: 低落/悲伤
+    label_en: sad_low
+  fatigued_exhausted:
+    valence:
+    - 0.0
+    - 0.4
+    arousal:
+    - 0.0
+    - 0.36
+    label: 疲惫/倦怠
+    label_en: fatigued_exhausted
+  focused_engaged:
+    valence:
+    - 0.52
+    - 0.92
+    arousal:
+    - 0.34
+    - 0.5
+    label: 专注/投入
+    label_en: focused_engaged
+  happy_cheerful:
+    valence:
+    - 0.6
+    - 1.0
+    arousal:
+    - 0.42
+    - 0.66
+    label: 愉悦/开心
+    label_en: happy_cheerful
+  excited_elated:
+    valence:
+    - 0.6
+    - 1.0
+    arousal:
+    - 0.68
+    - 0.92
+    label: 兴奋/激动
+    label_en: excited_elated
+  content_serene:
+    valence:
+    - 0.62
+    - 0.98
+    arousal:
+    - 0.0
+    - 0.36
+    label: 满足/安详
+    label_en: content_serene
+default_emotion: 中性
+default_emotion_en: neutral

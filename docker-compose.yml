@@ -1,0 +1,32 @@
+# 心镜·AIGC智能体平台 Docker Compose
+# 第八届全球校园人工智能算法精英大赛 · AI+学科交叉
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mindmirror
+    ports:
+      - "8000:8000"
+    environment:
+      - AI_PLATFORM=${AI_PLATFORM:-lingshu}
+      - LINGSHU_API_KEY=${LINGSHU_API_KEY:-}
+      - LINGSHU_BASE_URL=${LINGSHU_BASE_URL:-https://api.moark.com/v1}
+      - LINGSHU_MODEL=${LINGSHU_MODEL:-Lingshu-32B}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - AI_FALLBACK_PLATFORMS=${AI_FALLBACK_PLATFORMS:-deepseek}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/psych.db}
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

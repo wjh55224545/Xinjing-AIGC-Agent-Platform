@@ -1,0 +1,22 @@
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+sqlalchemy>=2.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+langchain>=0.1.0
+langchain-openai>=0.1.0
+langgraph>=0.0.30
+apscheduler>=3.10.0
+python-multipart>=0.0.5
+httpx>=0.24.0
+pytest>=7.0.0
+opencv-python-headless>=4.5.0
+numpy>=1.21.0
+scipy>=1.7.0
+ultralytics>=8.0.0
+matplotlib>=3.3.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
+# torch>=2.0.0  # 可选：仅曦云C500 GPU加速时需要，下载约2GB。服务器部署无需安装
+# 说明: opencv>=5.0 不再捆绑 Haar Cascade XML；人脸检测首选 ultralytics(YOLO)，
+#       Haar 仅作后备（无 XML 时引擎自动退化为画面中央 ROI 模式，不崩溃）。
