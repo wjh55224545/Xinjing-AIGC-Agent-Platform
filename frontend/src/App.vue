@@ -10,11 +10,11 @@
         <router-link to="/aigc">✨ AIGC报告</router-link>
         <router-link to="/agents">🤖 智能体面板</router-link>
         <router-link to="/scales">📋 心理量表</router-link>
-        <router-link to="/experiment">🧪 教学实验</router-link>
-        <router-link to="/virtual-subject">🎓 虚拟被试演练</router-link>
+        <router-link to="/experiment">🧪 经典实验</router-link>
+        <router-link to="/virtual-subject">🎓 虚拟被试</router-link>
       </nav>
       <div class="sidebar-footer">
-        <div class="footer-version">v2.0 · 心理教学平台</div>
+        <div class="footer-version">v2.1 · 心理健康评估平台</div>
         <div class="footer-status">
           <span class="status-dot"></span>
           系统运行中
