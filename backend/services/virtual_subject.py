@@ -1,18 +1,19 @@
 """
-虚拟被试教学闭环（Virtual Subject Teaching Loop）
-================================================
+虚拟被试合成数据引擎（Virtual Subject Engine）
+===============================================
 
-升级项：主攻创新性「教学新模式」+ 应用效果。
+升级项：服务于「诊断学生心理健康」的核心定位，虚拟被试是**合成数据引擎**，
+不是训练学生的教学工具。
 
-解决痛点：心理实验教学依赖真实被试，但真实被试难获取、隐私敏感、
-课堂上无法批量演示。虚拟被试由预设心理剖面驱动，生成完整的
-量表作答 + E1-E12 情绪参数 + 情绪时序，**隐藏真值**供学生诊断，
-学生提交诊断后系统按评分标准自动批改并给出反馈。
+用途：
+  1. 为诊断算法提供可复现的合成数据源（消融实验、信效度验证、等价性验证）
+  2. 在无真实数据时，演示系统对虚拟被试的完整自动诊断流程
 
 模块：
   1. 剖面库（PROFILES）：预设典型心理剖面（健康/焦虑/抑郁/压力等）
   2. 生成器（generate_virtual_subject）：按剖面生成被试数据，隐藏真值
-  3. 批改引擎（grade_diagnosis）：按评分标准对比学生诊断与真值，给分+反馈
+  3. 自动诊断（auto_diagnose）：系统从学生可见数据出发自动诊断，与真值对照
+  4. 批改引擎（grade_diagnosis）：按评分标准对比诊断与真值（保留用于算法评估）
 
 ⚠️ 所有虚拟被试数据均标记 is_virtual=True，与真实学生数据严格隔离。
 """
@@ -27,6 +28,7 @@ from backend.services.synthetic_data import (
 
 # 评分等级顺序（用于相邻等级判定）
 _LEVEL_ORDER = ["normal", "mild", "moderate", "severe"]
+_LEVEL_RANK = {"normal": 0, "mild": 1, "moderate": 2, "severe": 3}
 _LEVEL_CN = {"normal": "正常", "mild": "轻度", "moderate": "中度", "severe": "重度"}
 
 # 情绪类别顺序（用于相邻判定）
@@ -232,9 +234,10 @@ def generate_virtual_subject(profile_id: str, seed: int | None = None) -> dict:
     e_params = generate_e_params(theta, rng)
     emotion_label = emotion_from_theta(theta)
 
-    # 主导量表的真值等级
+    # 真值综合等级：所有量表中等级最严重者（反映综合严重程度）
     dominant = profile["dominant_scale"]
-    true_level = scale_scores[dominant]["level"]
+    true_level = max((sc["level"] for sc in scale_scores.values()),
+                     key=lambda lv: _LEVEL_RANK.get(lv, 0))
 
     subject_id = f"VS-{uuid.uuid4().hex[:8].upper()}"
 
@@ -249,7 +252,7 @@ def generate_virtual_subject(profile_id: str, seed: int | None = None) -> dict:
         "student_view": {
             "scale_answers": scale_answers,
             "e_params": e_params,
-            "k_value": round(min(max(1.5 + 3.0 * abs(theta), 0.5), 12.0), 2),
+            "k_value": round(min(max(1.5 + 3.0 * max(0.0, theta), 0.5), 12.0), 2),
             "dominant_scale": dominant,
             "note": "请根据以上数据判断该被试的心理状态，并给出干预建议。",
         },
@@ -390,3 +393,107 @@ def _score_suggestion(text: str, true_level: str, max_score: int) -> tuple[int, 
     ratio = len(matched) / len(keywords)
     score = int(round(max_score * ratio))
     return score, matched, missing
+
+
+# ==================== 自动诊断 ====================
+
+_LEVEL_RANK = {"normal": 0, "mild": 1, "moderate": 2, "severe": 3}
+_EMOTION_RANK = {"positive": 0, "neutral": 1, "mild_negative": 2, "severe_negative": 3}
+
+_NEGATIVE_E_KEYS = ["aggression", "stress", "tension", "suspicious",
+                    "inhibition", "neuroticism", "depression"]
+_POSITIVE_E_KEYS = ["balance", "charm", "energy", "self_regulation", "happiness"]
+
+
+def auto_diagnose(subject: dict) -> dict:
+    """
+    系统自动诊断：从「学生可见数据」（量表作答 + E1-E12 参数 + K 值）出发，
+    模拟诊断算法给出结论，并与真值对照，验证诊断算法的准确性。
+
+    返回结构化诊断报告：
+      - scale_diagnosis: 各量表计分结果（标准分 + 等级）+ 综合量表等级
+      - emotion_diagnosis: 基于前庭参数的情绪状态判定
+      - risk_diagnosis: 焦虑抑郁风险分级（复用 risk_assessment 服务）
+      - comparison: 与真值逐项对照（量表等级/情绪/是否一致）
+    """
+    view = subject["student_view"]
+    truth = subject["ground_truth"]
+
+    # 1. 量表维度诊断：对五套量表作答重新计分
+    from backend.api.routes.scales import _load_scale, _score_scale
+    scales = [_load_scale(c) for c in ["SAS", "SDS", "SCL-90", "PSS-10", "PANAS"]]
+    scale_results = {}
+    for s in scales:
+        code = s["code"]
+        scoring = _score_scale(s, view["scale_answers"][code])
+        scale_results[code] = {
+            "raw_score": scoring["raw_score"],
+            "standard_score": scoring["standard_score"],
+            "level": scoring["level"],
+        }
+    # 综合量表等级：取所有量表中等级最严重者
+    overall_level = max(
+        scale_results.values(), key=lambda v: _LEVEL_RANK[v["level"]]
+    )["level"]
+
+    # 2. 情绪维度诊断：基于 E1-E12 前庭参数（负性 vs 正性均值）
+    #    阈值与 emotion_from_theta 的 θ 分段对齐（θ=1.0/0.3/-0.3 对应边界）
+    e = view["e_params"]
+    neg_avg = sum(e.get(k, 0) for k in _NEGATIVE_E_KEYS) / len(_NEGATIVE_E_KEYS)
+    pos_avg = sum(e.get(k, 0) for k in _POSITIVE_E_KEYS) / len(_POSITIVE_E_KEYS)
+    if neg_avg >= 40:
+        emotion_diag = "severe_negative"
+    elif neg_avg >= 33:
+        emotion_diag = "mild_negative"
+    elif neg_avg <= 29 and pos_avg >= 50:
+        emotion_diag = "positive"
+    else:
+        emotion_diag = "neutral"
+
+    # 3. 焦虑抑郁风险分级：复用 risk_assessment 服务
+    from backend.services.risk_assessment import assess_risk
+    risk = assess_risk(
+        sas_score=scale_results.get("SAS", {}).get("standard_score"),
+        sds_score=scale_results.get("SDS", {}).get("standard_score"),
+    )
+    risk_level_cn = {"low": "低风险", "medium": "中风险", "high": "高风险", "extreme": "极高风险"}
+
+    # 4. 与真值逐项对照
+    comparison = {
+        "scale_level_match": overall_level == truth["true_level"],
+        "scale_level": overall_level,
+        "scale_level_cn": _LEVEL_CN[overall_level],
+        "true_level_cn": _LEVEL_CN[truth["true_level"]],
+        "emotion_match": emotion_diag == truth["emotion_label"],
+        "emotion": emotion_diag,
+        "emotion_cn": _EMOTION_CN[emotion_diag],
+        "true_emotion_cn": _EMOTION_CN[truth["emotion_label"]],
+    }
+
+    return {
+        "subject_id": subject["subject_id"],
+        "profile_name": subject["profile_name"],
+        "profile_id": subject["profile_id"],
+        "scale_diagnosis": {
+            "detail": scale_results,
+            "overall_level": overall_level,
+            "overall_level_cn": _LEVEL_CN[overall_level],
+        },
+        "emotion_diagnosis": {
+            "emotion": emotion_diag,
+            "emotion_cn": _EMOTION_CN[emotion_diag],
+            "neg_avg": round(neg_avg, 2),
+            "pos_avg": round(pos_avg, 2),
+            "k_value": view.get("k_value", 0),
+        },
+        "risk_diagnosis": {
+            "level": risk.overall_level,
+            "level_cn": risk_level_cn.get(risk.overall_level, risk.overall_level),
+            "score": risk.overall_score,
+            "anxiety": {"level": risk.anxiety_level, "score": risk.anxiety_score},
+            "depression": {"level": risk.depression_level, "score": risk.depression_score},
+            "recommendations": risk.recommendations,
+            "warning_flags": risk.warning_flags,
+        },
+        "comparison": comparison,
+    }
