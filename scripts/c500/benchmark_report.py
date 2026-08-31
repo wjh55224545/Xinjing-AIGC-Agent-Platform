@@ -3,7 +3,7 @@
 =====================================
 
 从 benchmark.py 输出的 JSON 生成可读的对比报告，
-用于比赛演示材料。
+用于性能演示材料。
 
 用法:
   python scripts/c500/benchmark_report.py data/benchmark_c500.json --output data/benchmark_report.md

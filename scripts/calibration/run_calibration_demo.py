@@ -108,7 +108,7 @@ def main() -> int:
     print("\n[5] 使用提示：")
     print("  - 将 weights_calibrated.yaml 内容合并进 weights.yaml 即完成校正；")
     print("  - 校正方向（happiness 正、depression 负）与项目真人视频验证结论一致；")
-    print("  - 正式参赛材料中，请用试点真实标注样本替换 build_demo_samples() 的数据。")
+    print("  - 正式使用时，请用试点真实标注样本替换 build_demo_samples() 的数据。")
     return 0
 
 

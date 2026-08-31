@@ -1,7 +1,7 @@
 """
 心镜·AIGC智能体平台 启动脚本
 ==============================
-第八届全球校园人工智能算法精英大赛 · 算法创新赛 · 赛题5「AI+学科交叉」
+面向心理健康的多模态情绪评估与智能分析平台
 
 使用方式:
     开发模式: python run_backend.py --dev
@@ -29,7 +29,7 @@ PRODUCTION = os.getenv("PRODUCTION", "0") == "1" or "--dev" not in sys.argv
 if __name__ == "__main__":
     print("=" * 60)
     print("  心镜·AIGC智能体平台 v2.4.0")
-    print("  第八届全球校园人工智能算法精英大赛 · AI+学科交叉")
+    print("  面向心理健康的多模态情绪评估与智能分析平台")
     mode_str = "Production" if PRODUCTION else "Development"
     print(f"  模式: {mode_str}")
     print("  算力平台: moark.com Lingshu-32B (沐曦MetaX GPU)")

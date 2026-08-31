@@ -6,7 +6,7 @@ AI算力平台适配层 (Platform Adapter)
 支持多个国产算力平台的无缝切换，通过环境变量配置即可变更后端。
 
 支持的平台:
-- Gitee.AI (沐曦 MetaX GPU) - 国产GPU算力，比赛主要平台
+- Gitee.AI (沐曦 MetaX GPU) - 国产GPU算力，主平台
 - DeepSeek - 国产大模型，备用
 - 可扩展: 华为昇腾、寒武纪等
 

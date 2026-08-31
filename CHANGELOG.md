@@ -50,19 +50,19 @@
 - 重写 `EmotionMonitorView.vue`：新增「趋势预测」按钮，调用预测 API
 - 预测概览 4 卡片（趋势方向/步数/突变点/漂移段）+ 预测柱状图（含置信区间）+ 异常详情 + 智能风险提示
 
-### 需求痛点文档化（升级11）
-- 新增 `docs/需求痛点分析报告.md`：五大核心痛点深度分析+目标用户+优先级矩阵+差异化优势
-- 新增 `docs/教师需求问卷模板.md`：32题四部分问卷（基本信息/痛点评估/功能需求/使用意愿）
+### 需求痛点文档化（升级11，文档已移至本地）
+- 新增 `docs/需求痛点分析报告.md`：五大核心痛点深度分析+目标用户+优先级矩阵+差异化优势（已移至本地）
+- 新增 `docs/教师需求问卷模板.md`：32题四部分问卷（基本信息/痛点评估/功能需求/使用意愿）（已移至本地）
 
 ### 方案可行性补强（升级12）
 - 新增 `scripts/benchmark/performance_benchmark.py`：API响应时间+并发性能+核心算法效率基准测试
 - `DEPLOY.md` 追加：Nginx反向代理+HTTPS、systemd服务管理、日志监控、数据备份
 - `DEPLOY.md` 追加国产化适配：操作系统/CPU架构/数据库/中间件适配表+信创部署检查清单+性能参考
 
-### 技术方案总结与展望（升级13）
-- 新增 `docs/技术方案总结与展望.md`：技术体系总结+跨学科理论根基+应用价值+短中长期演进路线+风险应对
+### 技术方案总结与展望（升级13，文档已移至本地）
+- 新增 `docs/技术方案总结与展望.md`：技术体系总结+跨学科理论根基+应用价值+短中长期演进路线+风险应对（已移至本地）
 
-## v2.4.0（赛题5「AI+学科交叉」技术升级）— 2026-08
+## v2.4.0 — 2026-08
 
 ### 心理量表模块（完整补齐）
 - 新增 `data/scales/` 五套标准量表题库：SAS(20题)、SDS(20题)、SCL-90(90题/10维度)、PSS-10(10题)、PANAS(20题)，题目标注论文来源（Zung 1965/1971、Derogatis 1975、Cohen 1983、Watson 1988）
@@ -71,7 +71,7 @@
 - **量表×AI 统计检验**（`backend/services/scale_stats.py`）：Pearson r、Cohen's Kappa、灵敏度/特异度/约登指数；`GET /api/scales/validation/summary` 全库效度统计
 - 前端量表页支持完整测评 + CAT 简版两种模式
 
-### 学科交叉教学组件
+### 情绪教学实验组件
 - 新增 `GET /api/vibraimage/norms` 常模端点（10,266 人、Z-Score 参数、E1-E12 中文名）
 - 新增 `GET /api/vibraimage/latest` 最近情绪记录端点
 - 新增前端教学实验页 `/experiment`：E1-E12 参数解释卡 + 个体 vs 常模雷达图 + K 值指数 + 实验指导书
@@ -93,7 +93,7 @@
 ### 修复（v2.4.0 内补丁）
 - 教学实验页"加载实验数据"失败：修复前端常模数据结构判断 bug；`/api/vibraimage/latest` 对无 E1-E12 字段的早期记录自动生成基于常模的演示参数（`demo=true`），保证教学演示可用
 - `face_detector.py` 兼容 opencv>=5.0（不再捆绑 Haar Cascade XML）：多路径查找 + 无 XML 时退化为画面中央 ROI 模式，引擎不再崩溃
-- 赛事标签/版本统一：main.py、docker-compose.yml、report_agent.py、swagger-chinese.html、run_backend.py、README 底部的旧「CCF 开源创新大赛·任务三」标签统一为「全球校园人工智能算法精英大赛·赛题5 AI+学科交叉」
+- 版本/标识统一：main.py、docker-compose.yml、report_agent.py、swagger-chinese.html、run_backend.py、README 底部的旧赛事标签统一为项目名称「心镜 MindMirror」
 - 新增 `.env.example` 环境变量模板；`frontend/package.json` 版本统一为 2.4.0
 
 ## v2.1.0（阶段三）— 2026-07

@@ -218,7 +218,7 @@ class OrchestratorAgent:
         2. 报告智能体: 基于分析结果 → AIGC生成评估报告
         3. 预警智能体: 根据风险等级 → 多渠道反馈
 
-        这是比赛核心展示的多Agent + AIGC协作流程。
+        这是平台核心展示的多Agent + AIGC协作流程。
         """
         run_id = run_id or str(uuid.uuid4())
         _ = self.get_queue(run_id)

@@ -1,5 +1,5 @@
 # 心镜·AIGC智能体平台 Docker Compose
-# 第八届全球校园人工智能算法精英大赛 · AI+学科交叉
+# 心镜 MindMirror · 心理健康多模态情绪评估平台
 
 version: '3.8'
 

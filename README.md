@@ -184,10 +184,10 @@ Xinjing/
 │   ├── ablation/               # 消融对照实验
 │   ├── benchmark/              # 性能基准测试
 │   └── ...
-├── docs/                       # 文档
-│   ├── 需求痛点分析报告.md
-│   ├── 教师需求问卷模板.md
-│   ├── 技术方案总结与展望.md
+├── docs/                       # 技术文档
+│   ├── ablation_report.md      # 消融对照实验报告
+│   ├── cat_equivalence_report.md  # 自适应测验等价性报告
+│   ├── emotion_forecast_report.md # 情绪预测与异常检测报告
 │   └── ...
 ├── tests/                      # 测试（127 项）
 ├── data/                       # 数据（SQLite、常模）
@@ -240,11 +240,11 @@ python scripts/benchmark/performance_benchmark.py --iterations 50 --concurrency 
 | 文档 | 说明 |
 |---|---|
 | [部署指南](DEPLOY.md) | 本地/Docker/云平台部署、Nginx 配置、国产化适配 |
-| [开发日志](DEVELOPMENT_LOG.md) | 13 项功能升级的完整记录 |
+| [开发日志](DEVELOPMENT_LOG.md) | 全部功能升级的完整记录（技术背景、改动、验证） |
 | [变更日志](CHANGELOG.md) | 版本变更记录 |
-| [需求痛点分析报告](docs/需求痛点分析报告.md) | 五大核心痛点深度分析 |
-| [教师需求问卷模板](docs/教师需求问卷模板.md) | 32 题教师需求问卷 |
-| [技术方案总结与展望](docs/技术方案总结与展望.md) | 技术体系、跨学科理论、演进路线 |
+| [消融对照实验报告](docs/ablation_report.md) | 三模态融合消融实验方法与结果 |
+| [自适应测验等价性报告](docs/cat_equivalence_report.md) | CAT 与全量表等价性验证 |
+| [情绪预测与异常检测报告](docs/emotion_forecast_report.md) | 预测/异常检测算法验证 |
 
 ---
 
