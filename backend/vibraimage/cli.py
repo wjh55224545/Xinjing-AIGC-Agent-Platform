@@ -3,16 +3,16 @@
 
 使用方法:
     # 分析单个视频
-    python -m vibraimage path/to/video.mp4
+    python -m backend.vibraimage.cli path/to/video.mp4
 
     # 指定窗口参数
-    python -m vibraimage video.mp4 --window-frames 100 --stride 50
+    python -m backend.vibraimage.cli video.mp4 --window-frames 100 --stride 50
 
     # 输出JSON结果
-    python -m vibraimage video.mp4 --output results.json
+    python -m backend.vibraimage.cli video.mp4 --output results.json
 
     # 使用FFT模式 (更精确但更慢)
-    python -m vibraimage video.mp4 --method fft
+    python -m backend.vibraimage.cli video.mp4 --method fft
 """
 
 import argparse
@@ -42,9 +42,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python -m vibraimage test.mp4
-  python -m vibraimage test.mp4 --output result.json
-  python -m vibraimage test.mp4 --window-frames 100 -v
+  python -m backend.vibraimage.cli test.mp4
+  python -m backend.vibraimage.cli test.mp4 --output result.json
+  python -m backend.vibraimage.cli test.mp4 --window-frames 100 -v
         """,
     )
     parser.add_argument('video', help='视频文件路径')

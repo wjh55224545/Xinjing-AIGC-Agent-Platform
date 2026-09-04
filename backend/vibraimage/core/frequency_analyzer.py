@@ -100,6 +100,8 @@ class PerPixelFrequencyAnalyzer:
                     (signs[:-1] * signs[1:] < 0).float(), dim=0
                 )
                 freq_map_g = zero_crossings / (2.0 * total_time)
+                # 零过零像素(无振动)置 NaN，不混入直方图(避免 0.1Hz 假低频)
+                freq_map_g[zero_crossings == 0] = float('nan')
                 freq_map_g = xp.clip(freq_map_g, self.freq_band[0], self.freq_band[1])
                 amp_map_g = xp.sqrt(xp.mean(detrended ** 2, dim=0))
                 freq_map = to_cpu(freq_map_g).astype(np.float32)
@@ -110,6 +112,8 @@ class PerPixelFrequencyAnalyzer:
                 signs = np.sign(detrended)
                 zero_crossings = np.sum((signs[:-1] * signs[1:]) < 0, axis=0).astype(np.float32)
                 freq_map = (zero_crossings / (2.0 * total_time)).astype(np.float32)
+                # 零过零像素(无振动)置 NaN，不混入直方图(避免 0.1Hz 假低频)
+                freq_map[zero_crossings == 0] = np.nan
                 freq_map = np.clip(freq_map, self.freq_band[0], self.freq_band[1])
                 amp_map = np.sqrt(np.mean(detrended ** 2, axis=0)).astype(np.float32)
 
@@ -203,3 +207,181 @@ class PerPixelFrequencyAnalyzer:
         """
         spatial_mean = np.mean(diff_seq, axis=(1, 2))
         return spatial_mean
+
+    def compute_f1_frequency(self, diff_seq: np.ndarray) -> float:
+        """
+        估计 F1 参数 —— vibraimage 变化频率 (真 F1)。
+
+        F1 是「头部重心位移前庭图 (vestibulogram)」的时间频率，
+        即帧差分空间均值的一维时间序列的主频 (VCE.pdf 方程(11), p99)。
+        与 _zerocross_analysis 相同口径: f = N_zc / (2 × duration)。
+
+        Parameters
+        ----------
+        diff_seq : np.ndarray, shape (N_frames, H, W)
+            帧差分序列。
+
+        Returns
+        -------
+        f1 : float
+            前庭图时间频率 [Hz]。零过零 (信号恒定) 时返回 0.0。
+        """
+        if diff_seq.ndim != 3 or diff_seq.shape[0] < 2:
+            return 0.0
+
+        spatial_mean = np.mean(diff_seq, axis=(1, 2))  # (N,)
+        N = spatial_mean.shape[0]
+        total_time = N / self.frame_rate
+
+        # 去直流分量
+        detrended = spatial_mean - np.mean(spatial_mean)
+
+        # 过零计数: 相邻采样点符号变化
+        signs = np.sign(detrended)
+        zero_crossings = int(np.sum((signs[:-1] * signs[1:]) < 0))
+
+        if zero_crossings == 0 or total_time <= 0:
+            return 0.0
+
+        f1 = zero_crossings / (2.0 * total_time)
+        return float(f1)
+
+
+# ============================================================================
+# 参考实现: 泄露 VibraImage 源码的「低层频率定义」逐行翻译
+# ============================================================================
+# 来源: C:\Users\Lenovo\Desktop\VibraImage-Github-pirated (ELSYS 泄露源码)
+# 用途: 与本模块的过零率/FFT 口径对齐，供 E1/E3 标定时的数值对照。
+# 结论: 泄露源码的「频率」既不是过零率、也不是 FFT，而是「变化计数」。
+# ============================================================================
+
+
+def make_aura_color_a_1d(
+    delta_values: np.ndarray,
+    change_threshold: float = 1.0,
+) -> float:
+    """
+    ELSYS VibraImage `MakeAuraColorA` 的逐像素翻译。
+
+    源: viEngineThread.cpp:1853-1885，函数体完整，逐行核对如下:
+
+        int CVIEngineThread::MakeAuraColorA(int nSum, int x, int y)
+        {
+            int n0 = m_pBase->m_arrDelta.front().n;   // 最新帧号
+            int n  = m_pBase->m_cfg.GetI1(m_summ[nSum].id);  // 窗口长度
+            int nLast = n0 - n + 1; if (nLast < 0) nLast = 0;
+            float dl = 0; int dn = 0, cnt = 0;
+            for (每个 delta 帧, 从最旧到最新):
+                float v  = delta.i[y][x];      // 该像素的帧差值
+                float dv = fabs(v - dl);       // 相邻两帧「帧差值」的变化
+                if (dv > 1.0f) ++dn;           // 变化超过噪声阈值 → 计一次
+                dl = v; ++cnt;
+                if (delta.n == nLast) break;   // 只取最近 n 帧
+            if (!cnt) return 0;
+            return dn * 255 / cnt;             // 归一化到 [0, 255]
+        }
+
+    与本项目口径的语义差异 (标定时必须区分):
+      - 本项目过零率法: 对「去均值后的帧差信号」数符号翻转，f = N_zc/(2T)，
+        度量信号围绕 0 的正负交替。
+      - 泄露源码: 数「相邻两帧的帧差值本身变化 > 1.0」的次数 dn，
+        再 dn*255/cnt 归一化，度量帧差信号幅值跳变的频繁程度(抖动)。
+      两者都是「频率」的近似，但数学定义不同，数值不可互通。
+
+    Parameters
+    ----------
+    delta_values : np.ndarray, shape (n_frames,)
+        单个像素的帧差分时间序列 (帧差, 非原始灰度)。
+    change_threshold : float, default=1.0
+        判定「变化」的幅值阈值，对应源码里的硬编码 1.0f。
+
+    Returns
+    -------
+    color : float
+        dn * 255 / cnt，范围 [0, 255]。
+        注: 源码里 dn*255/cnt 是 int 截断除法，这里返回 float，
+        与源码差 < 1.0，不影响直方图统计。
+    """
+    if delta_values is None or len(delta_values) == 0:
+        return 0.0
+
+    v = np.asarray(delta_values, dtype=np.float64)
+    # dl 初始为 0，故第一帧与 0 比较 (|v[0]-0|)，此后与前一帧比较
+    prev = np.concatenate(([0.0], v[:-1]))
+    dv = np.abs(v - prev)
+    dn = int(np.sum(dv > change_threshold))
+    cnt = int(v.shape[0])
+    if cnt == 0:
+        return 0.0
+    return dn * 255.0 / cnt
+
+
+def make_aura_color_map(
+    diff_seq: np.ndarray,
+    change_threshold: float = 1.0,
+) -> np.ndarray:
+    """
+    `MakeAuraColorA` 的全图向量化版本 — 与 freq_map 同形，便于对照。
+
+    对 diff_seq (N, H, W) 的每个像素独立执行 make_aura_color_a_1d，
+    返回 (H, W) 的「变化计数频率图」，范围 [0, 255]。
+
+    Parameters
+    ----------
+    diff_seq : np.ndarray, shape (N, H, W)
+        帧差分序列。
+    change_threshold : float, default=1.0
+        幅值变化阈值，对应源码 1.0f。
+
+    Returns
+    -------
+    color_map : np.ndarray, shape (H, W)
+        逐像素变化计数频率 [0, 255]，可直接与
+        PerPixelFrequencyAnalyzer 输出的 freq_map 对照。
+    """
+    if diff_seq.ndim != 3 or diff_seq.shape[0] == 0:
+        return np.zeros((0, 0), dtype=np.float64)
+
+    N = diff_seq.shape[0]
+    # dl 初始为 0: 第一帧与 0 比较
+    prev = np.concatenate(
+        (np.zeros((1, *diff_seq.shape[1:]), dtype=diff_seq.dtype), diff_seq[:-1]),
+        axis=0,
+    )
+    dv = np.abs(diff_seq.astype(np.float64) - prev.astype(np.float64))
+    dn = np.sum(dv > change_threshold, axis=0)  # (H, W)
+    return dn * 255.0 / N
+
+
+# ============================================================================
+# 参考: F6/F7/F8/F9 分频带通滤波 —— 泄露源码中「实现缺失」，仅能还原接口
+# ============================================================================
+# 源: viEngineBase.cpp:47 构造函数初始化列表
+#     m_procF6(this,
+#              VI_VAR_STAT_RES_F6,      // 输出: F6 结果
+#              VI_VAR_STAT_RES_F8,      // 输出: F8 结果
+#              VI_VAR_STAT_RES_F7,      // 输出: F7 结果
+#              VI_FILTER_BWT_F6_HI,     // 带通上截止频率
+#              VI_FILTER_BWT_F6_LO,     // 带通下截止频率
+#              VI_FILTER_F6_N,          // 滤波器阶数/窗口长度
+#              VI_VAR_STAT_RES_F9)      // 输出: F9 结果
+#
+# 类型 CVIEngineProcDT 定义于 VIEngineProcDT.h (viEngineBase.h:21 #include)，
+# 但该 .h/.cpp 不在泄露仓库中 —— 与 VIEngineConfig.cpp 被掏空同源，
+# 是这份泄露被「挑着删」的又一处证据。
+#
+# 结论: F6→F7/F8/F9 的真实滤波算法在这份泄露里【不存在】，无法翻译。
+# 这里不给可执行代码，避免用自造实现冒充「泄露源码翻译」。
+#
+# 能确定的只有三件事:
+#   1. 存在一个「把 F6 频段拆成 F7/F8/F9 三个子带」的带通处理对象;
+#   2. 截止频率由 VI_FILTER_BWT_F6_HI / VI_FILTER_BWT_F6_LO 提供，
+#      阶数由 VI_FILTER_F6_N 提供;
+#   3. 这与 VCE p76 的 5Hz/30Hz 分频思想同源 —— F6 是总频段，
+#      F7/F8/F9 是切分后的子带 (低频/中频/高频)。
+#
+# 若要实现，正确的参照路径是:
+#   - 把 freq_map/功率谱按 (0.1, 5) / (5, 30) / (30, +∞) 切三段,
+#     对应 VCE 的 Aggression(5Hz) / 中频 / Anxiety(30Hz) 分界;
+#   - BWT_F6_HI/LO 的具体数值要回到未泄露的配置数据里找，不能猜。
+# ============================================================================

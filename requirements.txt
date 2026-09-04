@@ -17,6 +17,8 @@ ultralytics>=8.0.0
 matplotlib>=3.3.0
 python-dotenv>=1.0.0
 pyyaml>=6.0
+deepface>=0.0.90
+tensorflow>=2.15.0
 # torch>=2.0.0  # 可选：仅曦云C500 GPU加速时需要，下载约2GB。服务器部署无需安装
 # 说明: opencv>=5.0 不再捆绑 Haar Cascade XML；人脸检测首选 ultralytics(YOLO)，
 #       Haar 仅作后备（无 XML 时引擎自动退化为画面中央 ROI 模式，不崩溃）。

@@ -41,7 +41,7 @@ class SpectralPowerDistribution:
         self,
         frame_rate: float = 30.0,
         freq_band: Tuple[float, float] = (0.1, 10.0),
-        high_freq_threshold: float = 3.0,
+        high_freq_threshold: float = 5.0,
     ):
         self.frame_rate = frame_rate
         self.freq_band = freq_band

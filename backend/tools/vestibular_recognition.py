@@ -2,27 +2,30 @@
 前庭振动识别工具 (VestibularRecognitionTool)
 ============================================
 
-基于VibraImage引擎实现真实的前庭振动情绪识别，
-替代原有的随机stub实现。
+基于 VibraImage 引擎实现真实的前庭振动情绪识别，
+替代原有的随机 stub 实现。
 
 核心技术:
 - Viktor Minkin "Vibraimage, Cybernetics and Emotions" (2020) 专著公式
-- 逐像素帧差分 → 频率分析 → 直方图 → 空间分析 → 频谱功率
-- E1-E12情绪参数 + K值心理状态指标
-- YOLOv8人脸检测 + Haar Cascade后备
+- 逐像素帧差分 -> 频率分析 -> 直方图 -> 空间分析 -> 频谱功率
+- E1-E12 情绪参数 + K 值心理状态指标
+- YOLOv8 人脸检测 + Haar Cascade 后备
 
 输出映射:
-- VibraImage E1-E12 → Valence/Arousal情绪空间
-- 正性情绪参数 → Valence > 0
-- 负性情绪参数 → Valence < 0
-- Energy + Tension → Arousal
+- VibraImage E1-E12 -> Valence/Arousal 情绪空间
+- 正性情绪参数 -> Valence > 0
+- 负性情绪参数 -> Valence < 0
+- Energy + Tension -> Arousal
+
+多模态融合支持:
+- execute() 返回 window_results，供 multi_modal_fusion 计算窗口方差置信度
 """
 
 from __future__ import annotations
 import os
 import logging
 import numpy as np
-from typing import Optional
+from typing import Optional, List, Dict
 from dataclasses import dataclass, field
 
 from backend.tools.base import BaseTool, ToolResult
@@ -34,13 +37,13 @@ logger = logging.getLogger(__name__)
 @dataclass
 class VibraImageVestibularResult:
     """前庭振动分析的完整结果。"""
-    # 效价-唤醒度映射
+    # 效价 - 唤醒度映射
     valence: float
     arousal: float
     intensity: float
     confidence: float
 
-    # E1-E12 情绪参数 (Minkin体系)
+    # E1-E12 情绪参数 (Minkin 体系)
     aggression: float       # E1
     stress: float           # E2
     tension: float          # E3
@@ -63,6 +66,10 @@ class VibraImageVestibularResult:
     n_windows: int
     duration_sec: float
     face_detection_rate: float
+
+    # 多模态融合用：窗口结果序列
+    window_results: List[Dict] = field(default_factory=list)
+
     error: str = ""
 
     def to_dict(self) -> dict:
@@ -89,26 +96,27 @@ class VibraImageVestibularResult:
             "n_windows": self.n_windows,
             "duration_sec": self.duration_sec,
             "face_detection_rate": self.face_detection_rate,
+            "window_results": self.window_results,
             "error": self.error,
         }
 
 
 class VestibularRecognitionTool(BaseTool):
     """
-    前庭振动情绪识别工具 — 基于VibraImage引擎。
+    前庭振动情绪识别工具 — 基于 VibraImage 引擎。
 
     处理流程:
-        视频加载 → 人脸检测(YOLOv8) → 帧差分 → 频率分析
-        → 直方图 → 空间分析 → 频谱 → E1-E12情绪参数 → K值
+        视频加载 -> 人脸检测 (YOLOv8) -> 帧差分 -> 频率分析
+        -> 直方图 -> 空间分析 -> 频谱 -> E1-E12 情绪参数 -> K 值
 
-    输出映射到效价-唤醒度空间供上层融合使用。
+    输出映射到效价 - 唤醒度空间供上层融合使用。
     """
 
     name = "前庭振动识别"
     description = (
-        "基于VibraImage技术的前庭振动情绪识别。通过分析视频中人脸区域的"
-        "微振动频率和空间分布，计算E1-E12情绪参数和K值心理状态指标。"
-        "输入：视频路径。输出：效价、唤醒度、12项情绪参数、K值。"
+        "基于 VibraImage 技术的前庭振动情绪识别。通过分析视频中人脸区域的"
+        "微振动频率和空间分布，计算 E1-E12 情绪参数和 K 值心理状态指标。"
+        "输入：视频路径。输出：效价、唤醒度、12 项情绪参数、K 值。"
     )
 
     def __init__(self):
@@ -117,7 +125,7 @@ class VestibularRecognitionTool(BaseTool):
         self._mapper = None
 
     def _get_engine(self):
-        """延迟初始化VibraImage引擎（避免导入时的模型加载开销）。"""
+        """延迟初始化 VibraImage 引擎（避免导入时的模型加载开销）。"""
         if self._engine is None:
             try:
                 from backend.vibraimage.pipeline.engine import VibraImageEngine
@@ -146,9 +154,9 @@ class VestibularRecognitionTool(BaseTool):
 
                 self._mapper = EmotionMapper()
 
-                logger.info("VibraImage引擎 v0.2.0 初始化成功（含L2映射层）")
+                logger.info("VibraImage 引擎 v0.2.0 初始化成功（含 L2 映射层）")
             except Exception as e:
-                logger.error(f"VibraImage引擎初始化失败: {e}")
+                logger.error(f"VibraImage 引擎初始化失败：{e}")
                 self._engine = None
                 self._mapper = None
         return self._engine
@@ -161,7 +169,7 @@ class VestibularRecognitionTool(BaseTool):
             video_path: 视频文件路径
 
         Returns:
-            ToolResult with vestibular analysis data
+            ToolResult with vestibular analysis data, including window_results for fusion
         """
         if not video_path:
             return ToolResult(
@@ -174,7 +182,7 @@ class VestibularRecognitionTool(BaseTool):
             return ToolResult(
                 success=False,
                 data={},
-                error=f"视频文件不存在: {video_path}",
+                error=f"视频文件不存在：{video_path}",
             )
 
         engine = self._get_engine()
@@ -182,26 +190,26 @@ class VestibularRecognitionTool(BaseTool):
             return ToolResult(
                 success=False,
                 data={},
-                error="VibraImage引擎未初始化，请检查ultralytics和opencv依赖",
+                error="VibraImage 引擎未初始化，请检查 ultralytics 和 opencv 依赖",
             )
 
         try:
             import time
             start_time = time.time()
 
-            # 执行VibraImage分析
+            # 执行 VibraImage 分析
             session = engine.process_video(video_path)
             result_dict = session.to_dict()
             emotions = result_dict.get("emotions", {})
 
             processing_time_ms = int((time.time() - start_time) * 1000)
 
-            # 将E1-E12映射到效价-唤醒度空间（v0.2: 使用L2映射层）
+            # 将 E1-E12 映射到效价 - 唤醒度空间
+            # mapper 已更新为直接输出 [-1,1] 尺度
             if self._mapper is not None:
                 mapped = self._mapper.map(emotions, K=session.K_value)
-                # mapper输出[0,1] → 转换为[-1,1]保持上游融合兼容
-                valence = mapped.valence * 2.0 - 1.0
-                arousal = mapped.arousal * 2.0 - 1.0
+                valence = mapped.valence
+                arousal = mapped.arousal
                 intensity = mapped.intensity
             else:
                 # fallback: 旧版 ad-hoc 计算
@@ -209,6 +217,10 @@ class VestibularRecognitionTool(BaseTool):
                 arousal = self._compute_arousal(emotions)
                 intensity = self._compute_intensity(emotions)
             confidence = self._compute_confidence(session)
+
+            # 提取窗口结果（用于多模态融合的置信度计算）
+            # SessionResult.to_dict() 返回的 'windows' 键包含窗口序列
+            window_results = result_dict.get("windows", [])
 
             result = VibraImageVestibularResult(
                 valence=round(valence, 3),
@@ -235,13 +247,14 @@ class VestibularRecognitionTool(BaseTool):
                 # P14
                 stability=round(result_dict.get("psychophysiological", {}).get("stability", 0.0), 2),
 
-                # K值
+                # K 值
                 K_value=round(result_dict.get("K_value", 0.0), 2),
                 K_interpretation=result_dict.get("K_interpretation", ""),
 
                 n_windows=result_dict.get("n_windows", 0),
                 duration_sec=round(result_dict.get("duration_sec", 0.0), 1),
                 face_detection_rate=1.0,
+                window_results=window_results,
             )
 
             return ToolResult(
@@ -257,31 +270,31 @@ class VestibularRecognitionTool(BaseTool):
             return ToolResult(
                 success=False,
                 data={},
-                error=f"前庭振动分析失败: {str(e)}",
+                error=f"前庭振动分析失败：{str(e)}",
             )
 
-    # ---- 效价-唤醒度映射 ----
+    # ---- 效价 - 唤醒度映射 (fallback) ----
 
     def _compute_valence(self, emotions: dict) -> float:
         """
-        从VibraImage参数计算情绪效价(Valence)。
+        从 VibraImage 参数计算情绪效价 (Valence)。
 
-        正性参数(balance/charm/energy/self_regulation/happiness) → 正效价
-        负性参数(aggression/stress/tension/suspect/depression) → 负效价
+        正性参数 (balance/charm/energy/self_regulation/happiness) -> 正效价
+        负性参数 (aggression/stress/tension/suspect/depression) -> 负效价
 
-        归一化到[-1, 1]范围，0为中性。
+        归一化到 [-1, 1] 范围，0 为中性。
         """
-        # 正性情绪平均值（归一化到0-1）
+        # 正性情绪平均值（归一化到 0-1）
         positive_keys = ["balance", "charm", "energy", "self_regulation", "happiness"]
         positive_vals = [emotions.get(k, 50.0) / 100.0 for k in positive_keys]
         positive_score = np.mean(positive_vals)
 
-        # 负性情绪平均值（归一化到0-1）
+        # 负性情绪平均值（归一化到 0-1）
         negative_keys = ["aggression", "stress", "tension", "suspect", "depression"]
         negative_vals = [emotions.get(k, 30.0) / 100.0 for k in negative_keys]
         negative_score = np.mean(negative_vals)
 
-        # Valence = positive_score - negative_score，映射到[-1, 1]
+        # Valence = positive_score - negative_score，映射到 [-1, 1]
         raw_valence = positive_score - negative_score
         valence = np.clip(raw_valence, -1.0, 1.0)
 
@@ -289,19 +302,19 @@ class VestibularRecognitionTool(BaseTool):
 
     def _compute_arousal(self, emotions: dict) -> float:
         """
-        从VibraImage参数计算唤醒度(Arousal)。
+        从 VibraImage 参数计算唤醒度 (Arousal)。
 
-        高Energy + 高Tension → 高唤醒
-        低Energy + 低Tension → 低唤醒
+        高 Energy + 高 Tension -> 高唤醒
+        低 Energy + 低 Tension -> 低唤醒
 
-        归一化到[-1, 1]范围。
+        归一化到 [-1, 1] 范围。
         """
         energy_val = emotions.get("energy", 50.0) / 100.0
         tension_val = emotions.get("tension", 30.0) / 100.0
 
         # 唤醒度由能量和紧张度的组合决定
         raw_arousal = 0.6 * energy_val + 0.4 * tension_val
-        # 映射到[-1, 1]: 50% → 0, 0% → -1, 100% → 1
+        # 映射到 [-1, 1]: 50% -> 0, 0% -> -1, 100% -> 1
         arousal = (raw_arousal - 0.5) * 2.0
         arousal = np.clip(arousal, -1.0, 1.0)
 
@@ -310,7 +323,7 @@ class VestibularRecognitionTool(BaseTool):
     def _compute_intensity(self, emotions: dict) -> float:
         """
         计算振动信号强度。
-        基于所有E1-E12参数与常模的偏差程度。
+        基于所有 E1-E12 参数与常模的偏差程度。
         """
         from backend.vibraimage.utils.constants import NORMAL_NORMS
 
@@ -331,7 +344,7 @@ class VestibularRecognitionTool(BaseTool):
         基于窗口数量和人脸检测质量。
         """
         n_windows = session.n_windows
-        # 窗口数越多置信度越高，至少需要3个窗口
+        # 窗口数越多置信度越高，至少需要 3 个窗口
         if n_windows < 1:
             return 0.0
         elif n_windows < 3:

@@ -1,27 +1,26 @@
 """
-多模态情绪识别工具 (EmotionRecognitionTool)
+面部情绪识别工具 (EmotionRecognitionTool)
 ==========================================
 
-功能说明：
-- 集成面部图像分析与前庭振动API
-- 通过加权融合策略对个体情绪进行综合评估
-- 两种模态结果相互验证，置信度差异超过35%时自动触发复核
-- OpenCV 真实像素处理替代随机数 stub
+基于 DeepFace 深度学习的面部表情识别，输出 7 类基本情绪：
+开心、中性、悲伤、愤怒、惊讶、害怕、厌恶。
 
-模态融合策略：
-- 面部图像分析权重: 0.6
-- 前庭振动权重: 0.4
-- 复核触发阈值: 置信度差异 > 35%
+功能：
+- 单帧分析 analyze_frame / analyze_image
+- 视频多帧采样 + 概率平均聚合 analyze_video
+- 多人脸检测 detect_faces
+
+说明：
+- DeepFace 延迟加载，模块导入不阻塞。
+- 本轮仅实现面部识别，双模态（前庭振动）融合留待后续迭代。
 """
 
 from __future__ import annotations
 import os
-import random
-import hashlib
 import logging
-import math as _math
-from datetime import datetime
-from typing import Optional, Tuple, List
+import time
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -30,477 +29,508 @@ from backend.tools.base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
 
-# 模态融合权重
-FACIAL_WEIGHT = 0.6
-VESTIBULAR_WEIGHT = 0.4
-CONFIDENCE_DIFF_THRESHOLD = 0.35
+# DeepFace 情绪映射（英文 -> 中文）
+EMOTION_MAP = {
+    "happy": "开心",
+    "neutral": "中性",
+    "sad": "悲伤",
+    "angry": "愤怒",
+    "surprise": "惊讶",
+    "fear": "害怕",
+    "disgust": "厌恶",
+}
+
+# V/A 映射（7 类情绪，效价/唤醒度 ∈ [-1, 1]）
+EMOTION_VA = {
+    "开心":   (0.80,  0.60),
+    "中性":   (0.00,  0.00),
+    "悲伤":   (-0.70, -0.20),
+    "愤怒":   (-0.60,  0.80),
+    "惊讶":   (0.20,  0.90),
+    "害怕":   (-0.40,  0.70),
+    "厌恶":   (-0.60,  0.40),
+}
 
 
-class FacialExpressionAnalyzer:
+def compute_va_from_probs(emotion_probs: Dict[str, float]) -> Tuple[float, float]:
     """
-    基于 OpenCV 的面部表情分析器。
+    将 7 类情绪概率分布映射到效价-唤醒度连续空间（设计规范第 1 步）。
 
-    使用 Haar Cascade 人脸检测 + 面部区域图像特征分析，
-    从真实像素中提取口部曲率、眼部开度、眉毛位置等特征，
-    推断基本情绪类别。
+    V_face = Σ(p_i × V_i)，A_face = Σ(p_i × A_i)
+    即 7 个情绪锚点坐标的「概率加权平均」，而非主导情绪的单一锚点。
+    概率分布越分散，加权结果越接近中性原点 (0, 0)。
 
-    不依赖任何外部 API 或深度学习框架（纯 OpenCV + NumPy）。
+    Args:
+        emotion_probs: 7 类情绪概率分布（英文键: happy/neutral/sad/...）
+
+    Returns:
+        (valence, arousal) ∈ [-1, 1]
     """
+    if not emotion_probs:
+        return 0.0, 0.0
 
-    def __init__(self):
-        # 尝试多个级联分类器（LBP 更快且对合成脸更宽容）
-        cascade_files = [
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml',
-            cv2.data.haarcascades + 'haarcascade_frontalface_alt.xml',
-            cv2.data.haarcascades + 'haarcascade_frontalface_alt2.xml',
-        ]
-        self._cascades = []
-        for cf in cascade_files:
-            if os.path.exists(cf):
-                c = cv2.CascadeClassifier(cf)
-                if not c.empty():
-                    self._cascades.append(c)
-        self._cascade_loaded = len(self._cascades) > 0
+    valence = 0.0
+    arousal = 0.0
+    total = 0.0
+    for en_key, prob in emotion_probs.items():
+        cn = EMOTION_MAP.get(en_key)
+        if cn is None:
+            continue
+        v, a = EMOTION_VA.get(cn, (0.0, 0.0))
+        valence += float(prob) * v
+        arousal += float(prob) * a
+        total += float(prob)
 
-        if not self._cascade_loaded:
-            logger.warning("人脸检测级联分类器加载失败，将使用区域分析兜底")
+    if total <= 0:
+        return 0.0, 0.0
 
-    # Emotion → Valence/Arousal mapping
-    EMOTION_VA = {
-        "开心":   ( 0.80,  0.60), "平静":   ( 0.30, -0.30),
-        "悲伤":   (-0.70, -0.20), "焦虑":   (-0.40,  0.70),
-        "愤怒":   (-0.60,  0.80), "惊讶":   ( 0.20,  0.90),
-        "中性":   ( 0.00,  0.00),
-    }
+    return valence / total, arousal / total
 
-    def analyze_frame(self, frame: np.ndarray) -> Optional[dict]:
+
+DEFAULT_MODEL = "DeepFace"
+DEFAULT_DETECTOR_BACKEND = "opencv"
+
+
+@dataclass
+class FacialEmotionResult:
+    """DeepFace 面部情绪分析结果。"""
+    emotion: str                                   # 中文主导情绪
+    confidence: float                              # 主导情绪置信度 [0,1]
+    valence: float                                 # 效价 [-1,1]
+    arousal: float                                 # 唤醒度 [-1,1]
+    intensity: float                               # 情绪强度 [0,1]
+    emotion_probs: Dict[str, float] = field(default_factory=dict)  # 7 类概率分布（英文键）
+    face_count: int = 1                            # 检测到的人脸数（聚合时为有效帧数）
+    face_locations: List[Tuple[int, int, int, int]] = field(default_factory=list)
+    model_used: str = DEFAULT_MODEL
+    processing_time_ms: int = 0
+    error: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "emotion": self.emotion,
+            "confidence": round(self.confidence, 3),
+            "valence": round(self.valence, 3),
+            "arousal": round(self.arousal, 3),
+            "intensity": round(self.intensity, 3),
+            "emotion_probs": {EMOTION_MAP.get(k, k): round(v, 3)
+                             for k, v in self.emotion_probs.items()},
+            "face_count": self.face_count,
+            "model_used": self.model_used,
+            "processing_time_ms": self.processing_time_ms,
+            "error": self.error,
+        }
+
+
+class DeepFaceAnalyzer:
+    """基于 DeepFace 的面部表情分析器（延迟加载）。"""
+
+    def __init__(
+        self,
+        model_name: str = DEFAULT_MODEL,
+        enforce_detection: bool = False,
+        align: bool = True,
+        detector_backend: str = DEFAULT_DETECTOR_BACKEND,
+    ):
+        self.model_name = model_name
+        self.enforce_detection = enforce_detection
+        self.align = align
+        self.detector_backend = detector_backend
+        self._deepface_imported = False
+        self._deepface_module = None
+        self._load_deepface()
+
+    def _load_deepface(self) -> None:
+        """延迟加载 DeepFace 模块。"""
+        try:
+            from deepface import DeepFace
+            self._deepface_module = DeepFace
+            self._deepface_imported = True
+            logger.info(
+                f"DeepFace 加载成功，模型：{self.model_name}，检测后端：{self.detector_backend}"
+            )
+        except ImportError as e:
+            logger.warning(f"DeepFace 未安装：{e}")
+            self._deepface_imported = False
+
+    @property
+    def available(self) -> bool:
+        """DeepFace 是否可用（已成功导入）。"""
+        return self._deepface_imported
+
+    def analyze_frame(self, frame: np.ndarray) -> Optional[FacialEmotionResult]:
         """
         分析单帧图像的面部表情。
 
+        Args:
+            frame: BGR 格式的 numpy 图像数组
+
         Returns:
-            None 表示未检测到人脸
-            dict 含 emotion / confidence / valence / arousal / features
+            FacialEmotionResult 或 None（未检测到人脸 / 模块未加载）
         """
         if frame is None or frame.size == 0:
             return None
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
-
-        # 均衡化增强对比度
-        gray = cv2.equalizeHist(gray)
-
-        # 尝试所有级联分类器
-        faces = None
-        if self._cascade_loaded:
-            for cascade in self._cascades:
-                faces = cascade.detectMultiScale(
-                    gray, scaleFactor=1.1, minNeighbors=4,
-                    minSize=(50, 50),
-                )
-                if faces is not None and len(faces) > 0:
-                    break
-
-        # 级联失败 → 兜底：检测图像中心是否有高对比度椭圆区域（人脸轮廓）
-        if faces is None or len(faces) == 0:
-            faces = self._fallback_detect(gray)
-
-        if faces is None or len(faces) == 0:
+        if not self._deepface_imported:
             return None
 
-        # 取最大人脸
-        x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-        face_roi = gray[y:y + h, x:x + w]
+        start_time = time.time()
 
-        # —— 提取面部特征 ——
-        features = self._extract_features(face_roi)
-        emotion, confidence = self._infer_emotion(features, face_roi)
-        va = self.EMOTION_VA.get(emotion, (0.0, 0.0))
-
-        return {
-            "emotion": emotion,
-            "confidence": round(confidence, 3),
-            "valence": round(va[0] + random.uniform(-0.05, 0.05), 3),
-            "arousal": round(va[1] + random.uniform(-0.05, 0.05), 3),
-            "features": features,
-            "face_detected": True,
-        }
-
-    def _fallback_detect(self, gray: np.ndarray) -> list:
-        """
-        兜底检测：用边缘检测 + 轮廓分析寻找类椭圆形人脸区域。
-        当 Haar Cascade 对合成人脸失败时使用。
-        """
         try:
-            edges = cv2.Canny(gray, 40, 120)
-            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            candidates = []
-            for c in contours:
-                area = cv2.contourArea(c)
-                if area < 5000:
-                    continue
-                ellipse = cv2.fitEllipse(c)
-                (ex, ey), (ea, eb), _ = ellipse
-                aspect = min(ea, eb) / max(ea, eb) if max(ea, eb) > 0 else 0
-                if 0.5 < aspect < 1.0 and 5000 < area < 120000:
-                    # 检查区域内灰度方差（人脸有更多纹理）
-                    mask = np.zeros_like(gray)
-                    cv2.ellipse(mask, ellipse, 255, -1)
-                    roi_vals = gray[mask == 255]
-                    if len(roi_vals) > 100:
-                        variance = np.std(roi_vals.astype(np.float32))
-                        if variance > 20:
-                            candidates.append((area, ellipse))
-            if candidates:
-                candidates.sort(reverse=True)
-                _, (ex, ey), (ea, eb), _ = candidates[0]
-                x, y = int(ex - ea / 2), int(ey - eb / 2)
-                w, h = int(ea), int(eb)
-                return [(x, y, w, h)]
-        except Exception:
-            pass
-        return []
+            result = self._deepface_module.analyze(
+                img_path=frame,
+                actions=["emotion"],
+                enforce_detection=self.enforce_detection,
+                silent=True,
+                align=self.align,
+                detector_backend=self.detector_backend,
+            )
 
-    def _extract_features(self, face_gray: np.ndarray) -> dict:
-        """从灰度人脸 ROI 提取可解释的面部特征。"""
-        h, w = face_gray.shape
-        if h < 20 or w < 20:
-            return self._empty_features()
+            if not result:
+                return None
+            if isinstance(result, list):
+                if len(result) == 0:
+                    return None
+                face_result = result[0]
+                face_count = len(result)
+            else:
+                face_result = result
+                face_count = 1
 
-        upper = face_gray[0:h // 3, :]
-        middle = face_gray[h // 3:2 * h // 3, :]
-        lower = face_gray[2 * h // 3:, :]
+            if not isinstance(face_result, dict):
+                return None
 
-        # —— 嘴部曲率 ——
-        # 直接用原始亮度：将口部沿水平中轴分成上下两半
-        # 开心→嘴弧在上半(上半更暗)；悲伤→嘴弧在下半(下半更暗)
-        mh, mw = lower.shape
-        if mh > 6 and mw > 6:
-            mid = mh // 2
-            upper_half = lower[:mid, :]
-            lower_half = lower[mid:, :]
-            upper_mean = np.mean(upper_half.astype(np.float32))
-            lower_mean = np.mean(lower_half.astype(np.float32))
-            diff = upper_mean - lower_mean  # 正→上半更亮, 负→上半更暗(嘴弧在上半→开心)
-            # 归一化：亮度差 / 整体亮度 → [-1, 1]
-            total_brightness = np.mean(lower.astype(np.float32)) + 1.0
-            raw_curve = -diff / total_brightness  # 负值diff → 正curve(开心)
-            mouth_curve = float(np.clip(raw_curve * 5.0, -1.0, 1.0))
+            emotion_probs = face_result.get("emotion") or {}
+            if emotion_probs:
+                # DeepFace 返回百分制分数（总和≈100），归一化为概率（总和=1），
+                # 否则下游熵置信度 / 融合权重 / fused_conf 全部错乱。
+                _total = sum(float(v) for v in emotion_probs.values())
+                if _total > 1.0:
+                    emotion_probs = {
+                        k: float(v) / _total for k, v in emotion_probs.items()
+                    }
+                dominant = face_result.get("dominant_emotion") or max(
+                    emotion_probs, key=emotion_probs.get
+                )
+                emotion_en = str(dominant).lower()
+                confidence = float(emotion_probs.get(emotion_en, 0.0))
+            else:
+                emotion_en = "neutral"
+                confidence = 0.0
 
-            # 嘴部张开度：方差/均值（张嘴时暗嘴缝和亮面部形成更大方差）
-            mouth_var = np.std(lower.astype(np.float32))
-            mouth_openness = float(np.clip(mouth_var / (total_brightness + 1), 0.0, 1.0))
-        else:
-            mouth_curve = 0.0
-            mouth_openness = 0.3
+            emotion_cn = EMOTION_MAP.get(emotion_en, "中性")
+            # 效价/唤醒度 = 7 类概率加权平均（设计规范第1步），而非主导情绪单一锚点
+            valence, arousal = compute_va_from_probs(emotion_probs)
+            processing_time = int((time.time() - start_time) * 1000)
 
-        # —— 眼部 ——
-        eye_variance = np.std(upper.astype(np.float32)) / (np.mean(upper) + 1)
+            return FacialEmotionResult(
+                emotion=emotion_cn,
+                confidence=float(confidence),
+                valence=valence,
+                arousal=arousal,
+                intensity=float(confidence),
+                emotion_probs=emotion_probs,
+                face_count=face_count,
+                model_used=self.model_name,
+                processing_time_ms=processing_time,
+            )
 
-        # —— 眉毛 ——
-        brow_grad = np.mean(np.abs(cv2.Sobel(upper, cv2.CV_64F, 0, 1, ksize=3)))
-        brow_position = float(np.clip(brow_grad / 50.0, 0.0, 1.0))
+        except Exception as e:
+            logger.warning(f"DeepFace 分析失败：{e}")
+            return FacialEmotionResult(
+                emotion="中性",
+                confidence=0.0,
+                valence=0.0,
+                arousal=0.0,
+                intensity=0.0,
+                error=str(e),
+            )
 
-        # —— 对称性 ——
-        left = face_gray[:, :w // 2]
-        right = cv2.flip(face_gray[:, w // 2:], 1)
-        min_w = min(left.shape[1], right.shape[1]) if left.size > 0 and right.size > 0 else 1
+    def analyze_image(self, image_path: str) -> Optional[FacialEmotionResult]:
+        """从图片文件路径分析单张图片的面部表情。"""
+        if not image_path or not os.path.exists(image_path):
+            logger.warning(f"图片文件不存在：{image_path}")
+            return None
+        frame = cv2.imread(image_path)
+        if frame is None or frame.size == 0:
+            logger.warning(f"无法读取图片：{image_path}")
+            return None
+        return self.analyze_frame(frame)
+
+    def detect_faces(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
+        """检测图像中所有人脸位置（兼容 list[dict] 与 DataFrame 返回）。"""
+        if not self._deepface_imported:
+            return []
+
         try:
-            sym = np.corrcoef(
-                left[:, :min_w].flatten().astype(np.float32)[:500],
-                right[:, :min_w].flatten().astype(np.float32)[:500],
-            )[0, 1]
-            face_symmetry = float(np.clip(0 if _math.isnan(sym) else sym, 0.0, 1.0))
-        except Exception:
-            face_symmetry = 0.7
+            detected = self._deepface_module.detect_faces(
+                img_path=frame,
+                detector_backend=self.detector_backend,
+                enforce_detection=False,
+                align=self.align,
+            )
+            if detected is None:
+                return []
 
-        return {
-            "eye_opening": round(float(np.clip(eye_variance, 0.0, 1.0)), 2),
-            "mouth_curve": round(float(mouth_curve), 2),
-            "brow_position": round(brow_position, 2),
-            "face_symmetry": round(face_symmetry, 2),
-            "mouth_openness": round(mouth_openness, 2),
-        }
+            boxes: List[Tuple[int, int, int, int]] = []
 
-    def _empty_features(self) -> dict:
-        return {"eye_opening": 0.0, "mouth_curve": 0.0, "brow_position": 0.0,
-                "face_symmetry": 0.0, "mouth_brightness_ratio": 0.5}
+            def _to_box(area) -> Tuple[int, int, int, int]:
+                x, y, w, h = int(area["x"]), int(area["y"]), int(area["w"]), int(area["h"])
+                return (x, y, x + w, y + h)
 
-    def _infer_emotion(self, features: dict, face_roi: np.ndarray) -> Tuple[str, float]:
-        """基于面部特征推断情绪类别。"""
-        mc = features.get("mouth_curve", 0)          # >0 → 上扬, <0 → 下垂
-        mo = features.get("mouth_openness", 0.3)     # 高→张开
-        eye = features.get("eye_opening", 0.5)       # 高→睁大
-        brow = features.get("brow_position", 0.5)    # 高→眉毛压低
-        sym = features.get("face_symmetry", 0.8)
+            # 兼容 list[dict] 和 DataFrame 两种返回类型
+            if isinstance(detected, list):
+                for item in detected:
+                    if not isinstance(item, dict):
+                        continue
+                    area = item.get("facial_area") or item
+                    if isinstance(area, dict):
+                        boxes.append(_to_box(area))
+            elif hasattr(detected, 'iterrows'):  # DataFrame
+                for _, row in detected.iterrows():
+                    if "facial_area" in row and isinstance(row["facial_area"], dict):
+                        boxes.append(_to_box(row["facial_area"]))
+                    elif all(k in row for k in ("x", "y", "w", "h")):
+                        boxes.append(_to_box(row))
+            return boxes
 
-        # 规则推断：mc 符号决定基本情绪方向
-        if mc > 0.02:  # 上扬 → 正性
-            emotion = "开心"
-            conf = 0.70 + 0.12 * min(mc, 1.0)
-        elif mc < -0.02:  # 下垂 → 负性
-            if eye < 0.45:
-                emotion = "悲伤"
-                conf = 0.66 + 0.10 * abs(mc)
-            elif brow > 0.5:
-                emotion = "愤怒"
-                conf = 0.65 + 0.10 * brow
-            else:
-                emotion = "焦虑"
-                conf = 0.64 + 0.08 * abs(mc)
-        else:  # 中性范围
-            if mo > 0.5:
-                emotion = "惊讶"
-                conf = 0.66 + 0.08 * mo
-            elif 0.3 < eye < 0.55:
-                emotion = "平静"
-                conf = 0.68 + 0.08 * sym
-            else:
-                emotion = "中性"
-                conf = 0.64 + 0.08 * sym
-
-        confidence = min(0.93, max(0.60, conf))
-        return emotion, confidence
+        except Exception as e:
+            logger.warning(f"人脸检测失败：{e}")
+            return []
 
 
-# 全局单例
-_analyzer: Optional[FacialExpressionAnalyzer] = None
+def aggregate_frames(
+    results: List[Optional[FacialEmotionResult]],
+) -> Optional[FacialEmotionResult]:
+    """
+    聚合多帧面部情绪结果，返回平滑后的单个聚合结果。
+
+    对多帧的 emotion_probs（7 类 dict）做逐键概率平均（dict-aware，不用 np.mean），
+    取平均概率最大的情绪为最终结果；辅助统计各帧 argmax 标签的众数用于交叉校验。
+
+    新增：熵置信度计算 c_face = 1 - H / log(7)
+    """
+    import math
+    valid = [r for r in results if r is not None and r.error == ""]
+    if not valid:
+        return None
+
+    # 逐键概率平均
+    all_keys: set = set()
+    for r in valid:
+        all_keys.update(r.emotion_probs.keys())
+    avg_probs: Dict[str, float] = {}
+    for key in all_keys:
+        values = [r.emotion_probs.get(key, 0.0) for r in valid]
+        avg_probs[key] = float(sum(values) / len(values))
+
+    if avg_probs:
+        dominant_en = max(avg_probs, key=avg_probs.get)
+        emotion_cn = EMOTION_MAP.get(dominant_en, "中性")
+        confidence = avg_probs[dominant_en]
+    else:
+        emotion_cn = "中性"
+        confidence = 0.0
+
+    # 众数交叉校验（仅日志）
+    vote_counts: Dict[str, int] = {}
+    for r in valid:
+        vote_counts[r.emotion] = vote_counts.get(r.emotion, 0) + 1
+    majority_cn = max(vote_counts, key=vote_counts.get)
+    if majority_cn != emotion_cn:
+        logger.info(f"帧间情绪众数({majority_cn})与概率均值({emotion_cn})不一致")
+
+    # 效价/唤醒度 = 7 类概率加权平均（设计规范第1步）
+    valence, arousal = compute_va_from_probs(avg_probs)
+    total_time = sum(r.processing_time_ms for r in valid)
+
+    return FacialEmotionResult(
+        emotion=emotion_cn,
+        confidence=float(confidence),
+        valence=valence,
+        arousal=arousal,
+        intensity=float(confidence),
+        emotion_probs=dict(avg_probs),
+        face_count=len(valid),
+        face_locations=list(valid[0].face_locations),
+        model_used=valid[0].model_used,
+        processing_time_ms=int(total_time),
+    )
 
 
-def _get_analyzer() -> FacialExpressionAnalyzer:
-    global _analyzer
-    if _analyzer is None:
-        _analyzer = FacialExpressionAnalyzer()
-    return _analyzer
+def compute_facial_confidence_entropy(emotion_probs: Dict[str, float]) -> float:
+    """
+    计算面部情绪的熵置信度。
+
+    c_face = 1 - H / log(N)，其中 H = -Σ p_i * log(p_i)
+
+    Returns:
+        熵置信度 [0,1]，1=完全确定，0=完全不确定
+    """
+    import math
+    n_classes = len(emotion_probs)
+    if n_classes == 0:
+        return 0.0
+
+    max_entropy = math.log(n_classes)
+    entropy = -sum(p * math.log(p) for p in emotion_probs.values() if p > 0)
+
+    return 1 - (entropy / max_entropy) if max_entropy > 0 else 0.0
 
 
 class EmotionRecognitionTool(BaseTool):
-    """多模态情绪识别工具 - 融合面部图像分析与前庭振动数据"""
+    """
+    面部情绪识别工具。
 
-    name = "多模态情绪识别"
+    基于 DeepFace 深度学习的面部表情识别，提供单帧与视频两种入口。
+    输出键对齐调用方：facial_emotion / facial_conf / facial_valence / facial_arousal。
+    """
+
+    name = "面部情绪识别"
     description = (
-        "分析视频中人物的情绪状态，融合 OpenCV 面部图像分析和 VibraImage 前庭振动数据。"
-        "输入：视频路径、学生ID。输出：面部情绪、前庭振动参数、融合情绪、融合得分。"
+        "基于 DeepFace 深度学习的面部表情识别。"
+        "输入：图片路径或视频路径。输出：情绪类别、置信度、效价、唤醒度。"
     )
 
-    def __init__(self):
-        super().__init__()
-        self._call_count = 0
-
-    def execute(
+    def __init__(
         self,
-        video_path: str = "",
-        student_id: int | None = None,
-        baseline_mood: float = 0.7,
-        **kwargs
-    ) -> ToolResult:
-        self._call_count += 1
+        model_name: str = DEFAULT_MODEL,
+        detector_backend: str = DEFAULT_DETECTOR_BACKEND,
+    ):
+        super().__init__()
+        self.model_name = model_name
+        self.detector_backend = detector_backend
+        self._analyzer: Optional[DeepFaceAnalyzer] = None
 
-        try:
-            import time
+    def _get_analyzer(self) -> DeepFaceAnalyzer:
+        if self._analyzer is None:
+            self._analyzer = DeepFaceAnalyzer(
+                model_name=self.model_name,
+                detector_backend=self.detector_backend,
+            )
+        return self._analyzer
 
-            # ——— 步骤1: 从视频抽帧 + 真实 OpenCV 面部分析 ———
-            frames = self._extract_frames(video_path, max_frames=10)
-            analyzer = _get_analyzer()
+    def analyze_frame(self, frame: np.ndarray) -> Optional[FacialEmotionResult]:
+        """分析单帧图像的情绪。"""
+        return self._get_analyzer().analyze_frame(frame)
 
-            frame_results = []
-            faces_detected = 0
-            for fi, frame in enumerate(frames):
-                result = analyzer.analyze_frame(frame)
-                if result and result.get("face_detected"):
-                    faces_detected += 1
-                    frame_results.append({"facial": result})
-                else:
-                    frame_results.append({"facial": None, "no_face": True})
+    def analyze_image(self, image_path: str) -> Optional[FacialEmotionResult]:
+        """从图片文件路径分析单张图片。"""
+        return self._get_analyzer().analyze_image(image_path)
 
-            if faces_detected == 0:
-                # 没有人脸 → 不输出随机数据，诚实返回
-                logger.warning(f"视频 {video_path} 未检测到人脸 ({len(frames)} 帧)")
-                return ToolResult(
-                    success=False,
-                    data={},
-                    error=f"未检测到人脸（已分析 {len(frames)} 帧，请确保视频中包含清晰正面人脸）",
-                )
+    def analyze_video(
+        self,
+        video_path: str,
+        sample_fps: int = 5,
+    ) -> Tuple[Optional[FacialEmotionResult], int, int]:
+        """分析视频，返回 (聚合结果, 抽帧总数, 有效帧数)。"""
+        if not os.path.exists(video_path):
+            logger.error(f"视频文件不存在：{video_path}")
+            return None, 0, 0
 
-            # 聚合有效人脸帧的结果
-            valid_results = [r["facial"] for r in frame_results
-                             if "facial" in r and r["facial"] is not None]
-            if not valid_results:
-                return ToolResult(success=False, data={}, error="人脸检测失败")
-            num_valid = len(valid_results)
-            avg_facial_conf = sum(r["confidence"] for r in valid_results) / num_valid
-            avg_facial_valence = sum(r["valence"] for r in valid_results) / num_valid
-            avg_facial_arousal = sum(r["arousal"] for r in valid_results) / num_valid
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            logger.error(f"无法打开视频：{video_path}")
+            return None, 0, 0
 
-            facial_emotion = self._infer_emotion_from_va(avg_facial_valence, avg_facial_arousal)
+        total_fps = cap.get(cv2.CAP_PROP_FPS)
+        if total_fps <= 0:
+            total_fps = 30.0
+        frame_interval = max(1, int(total_fps / sample_fps))
 
-            # ——— 步骤2: 前庭振动分析 ———
-            vestibular = self._recognize_vestibular_emotion(video_path)
+        results: List[Optional[FacialEmotionResult]] = []
+        frame_idx = 0
+        sampled = 0
 
-            # ——— 步骤3: 双模态融合 ———
-            fused = self._fuse_emotions(
-                {"valence": avg_facial_valence, "arousal": avg_facial_arousal,
-                 "confidence": avg_facial_conf},
-                {"valence": vestibular["valence"], "arousal": vestibular["arousal"],
-                 "confidence": vestibular["confidence"]},
-                FACIAL_WEIGHT, VESTIBULAR_WEIGHT,
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if frame_idx % frame_interval == 0:
+                results.append(self.analyze_frame(frame))
+                sampled += 1
+            frame_idx += 1
+
+        cap.release()
+
+        valid = [r for r in results if r is not None and r.error == ""]
+        return aggregate_frames(results), sampled, len(valid)
+
+    def execute(self, video_path: str = "", **kwargs) -> ToolResult:
+        """
+        执行面部情绪识别（BaseTool 接口）。
+
+        支持两种输入：
+        - image_path: 单张图片路径
+        - video_path: 视频路径（多帧聚合）
+        """
+        image_path = kwargs.get("image_path", "")
+
+        if not video_path and not image_path:
+            return ToolResult(success=False, data={}, error="缺少 image_path 或 video_path 参数")
+
+        # 文件存在性检查
+        if image_path:
+            if not os.path.exists(image_path):
+                return ToolResult(success=False, data={}, error=f"图片文件不存在：{image_path}")
+        else:
+            if not os.path.exists(video_path):
+                return ToolResult(success=False, data={}, error=f"视频文件不存在：{video_path}")
+
+        # DeepFace 可用性检查
+        analyzer = self._get_analyzer()
+        if not analyzer.available:
+            return ToolResult(
+                success=False, data={},
+                error="DeepFace 未安装，请运行：pip install deepface tensorflow",
             )
 
-            conf_diff = abs(avg_facial_conf - vestibular["confidence"])
-            requires_review = conf_diff > CONFIDENCE_DIFF_THRESHOLD
-            baseline_deviation = abs(fused["score"] - baseline_mood)
+        try:
+            if image_path:
+                result = analyzer.analyze_image(image_path)
+                frame_count = 1
+                valid_frames = 1 if result is not None else 0
+            else:
+                result, frame_count, valid_frames = self.analyze_video(video_path)
 
-            detection_rate = faces_detected / len(frames) if frames else 0
-            estimated_accuracy = round(0.65 + 0.15 * avg_facial_conf + 0.05 * detection_rate, 2)
-
-            vi_params = vestibular.get("vibraimage_params") or {}
+            if result is None:
+                return ToolResult(success=False, data={}, error="未检测到有效的人脸情绪")
+            if result.error:
+                return ToolResult(success=False, data={}, error=f"面部情绪识别失败：{result.error}")
 
             return ToolResult(
                 success=True,
                 data={
-                    "facial_emotion": facial_emotion,
-                    "facial_conf": round(avg_facial_conf, 3),
-                    "facial_valence": round(avg_facial_valence, 3),
-                    "facial_arousal": round(avg_facial_arousal, 3),
-
-                    "vestibular_valence": round(vestibular["valence"], 3),
-                    "vestibular_arousal": round(vestibular["arousal"], 3),
-                    "vestibular_confidence": round(vestibular["confidence"], 3),
-                    "vestibular_intensity": round(vestibular["intensity"], 3),
-
-                    "fused_emotion": fused["emotion"],
-                    "fused_score": round(fused["score"], 3),
-                    "fused_valence": round(fused["valence"], 3),
-                    "fused_arousal": round(fused["arousal"], 3),
-
-                    "confidence_diff": round(conf_diff, 3),
-                    "requires_review": requires_review,
-                    "baseline_deviation": round(baseline_deviation, 3),
-                    "estimated_accuracy": round(estimated_accuracy, 2),
-
-                    "processing_time_ms": 0,
-                    "api_call_id": f"emot-{hashlib.md5(f'{self._call_count}{video_path}'.encode()).hexdigest()[:12]}",
-                    "timestamp": datetime.now().isoformat(),
-                    "video_path": video_path,
-                    "student_id": student_id,
-                    "frames_analyzed": len(frames),
-                    "faces_detected": faces_detected,
-
-                    "vi_aggression": vi_params.get("aggression"),
-                    "vi_stress": vi_params.get("stress"),
-                    "vi_tension": vi_params.get("tension"),
-                    "vi_suspect": vi_params.get("suspect"),
-                    "vi_balance": vi_params.get("balance"),
-                    "vi_charm": vi_params.get("charm"),
-                    "vi_energy": vi_params.get("energy"),
-                    "vi_self_regulation": vi_params.get("self_regulation"),
-                    "vi_inhibition": vi_params.get("inhibition"),
-                    "vi_neuroticism": vi_params.get("neuroticism"),
-                    "vi_depression": vi_params.get("depression"),
-                    "vi_happiness": vi_params.get("happiness"),
-                    "vi_stability": vi_params.get("stability"),
-                    "vi_K_value": vi_params.get("K_value"),
-                    "vi_K_interpretation": vi_params.get("K_interpretation"),
-                    "vi_n_windows": vi_params.get("n_windows"),
-                    "vi_duration_sec": vi_params.get("duration_sec"),
+                    "facial_emotion": result.emotion,
+                    "facial_conf": round(float(result.confidence), 3),
+                    "facial_valence": round(float(result.valence), 3),
+                    "facial_arousal": round(float(result.arousal), 3),
+                    "face_count": result.face_count,
+                    "frame_count": frame_count,
+                    "valid_frames": valid_frames,
+                    "model_used": result.model_used,
+                    "emotion_probs": {
+                        EMOTION_MAP.get(k, k): round(v, 3)
+                        for k, v in result.emotion_probs.items()
+                    },
+                    "confidence_entropy": round(
+                        float(compute_facial_confidence_entropy(result.emotion_probs)), 3
+                    ),
+                    "processing_time_ms": result.processing_time_ms,
                 },
             )
 
         except Exception as e:
-            logger.exception("多模态情绪识别失败")
-            return ToolResult(success=False, data={}, error=f"多模态情绪识别失败: {str(e)}")
+            logger.exception("情绪识别失败")
+            return ToolResult(success=False, data={}, error=f"情绪识别失败：{str(e)}")
 
-    def _extract_frames(self, video_path: str, max_frames: int = 10) -> List[np.ndarray]:
-        """从视频中提取帧。如果文件不存在则返回空列表。"""
-        if not video_path or not os.path.exists(video_path):
-            return []
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            return []
-        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        frames = []
-        step = max(1, total // max_frames) if total > 0 else 1
-        for i in range(0, total, step):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frames.append(frame)
-            if len(frames) >= max_frames:
-                break
-        cap.release()
-        return frames
 
-    def _recognize_vestibular_emotion(self, video_path: str) -> dict:
-        try:
-            from backend.tools.vestibular_recognition import VestibularRecognitionTool
-            tool = VestibularRecognitionTool()
-            result = tool.execute(video_path=video_path)
-            if result.success:
-                data = result.data
-                return {
-                    "valence": data.get("valence", 0.0),
-                    "arousal": data.get("arousal", 0.0),
-                    "intensity": data.get("intensity", 0.5),
-                    "confidence": data.get("confidence", 0.7),
-                    "inferred_emotion": self._infer_emotion_from_va(
-                        data.get("valence", 0.0), data.get("arousal", 0.0)),
-                    "vibraimage_params": {
-                        "aggression": data.get("aggression"),
-                        "stress": data.get("stress"),
-                        "tension": data.get("tension"),
-                        "suspect": data.get("suspect"),
-                        "balance": data.get("balance"),
-                        "charm": data.get("charm"),
-                        "energy": data.get("energy"),
-                        "self_regulation": data.get("self_regulation"),
-                        "inhibition": data.get("inhibition"),
-                        "neuroticism": data.get("neuroticism"),
-                        "depression": data.get("depression"),
-                        "happiness": data.get("happiness"),
-                        "stability": data.get("stability"),
-                        "K_value": data.get("K_value"),
-                        "K_interpretation": data.get("K_interpretation"),
-                        "n_windows": data.get("n_windows"),
-                        "duration_sec": data.get("duration_sec"),
-                    },
-                }
-            else:
-                logger.warning(f"VibraImage引擎失败: {result.error}")
-        except Exception as e:
-            logger.warning(f"VibraImage异常: {e}")
-        return self._vestibular_stub(video_path)
+_analyzer: Optional[DeepFaceAnalyzer] = None
 
-    def _vestibular_stub(self, video_path: str) -> dict:
-        seed = int(hashlib.md5(video_path.encode()).hexdigest(), 16) % 1000
-        random.seed(seed + 200)
-        valence = random.uniform(-0.6, 0.8)
-        arousal = random.uniform(-0.3, 0.9)
-        return {
-            "valence": round(valence, 3), "arousal": round(arousal, 3),
-            "intensity": random.uniform(0.3, 0.9),
-            "confidence": random.uniform(0.65, 0.90),
-            "inferred_emotion": self._infer_emotion_from_va(valence, arousal),
-            "vibraimage_params": None,
-        }
 
-    def _fuse_emotions(self, facial: dict, vestibular: dict,
-                       facial_weight: float, vestibular_weight: float) -> dict:
-        total_weight = facial_weight + vestibular_weight
-        w1, w2 = facial_weight / total_weight, vestibular_weight / total_weight
-        fused_valence = w1 * facial["valence"] + w2 * vestibular["valence"]
-        fused_arousal = w1 * facial["arousal"] + w2 * vestibular["arousal"]
-        emotion = self._infer_emotion_from_va(fused_valence, fused_arousal)
-        raw_score = 0.5 * fused_valence + 0.5 * fused_arousal + 0.5
-        score = 1.0 / (1.0 + _math.exp(-raw_score * 3))
-        confidence_weight = (facial["confidence"] * w1 + vestibular["confidence"] * w2)
-        final_score = score * (0.85 + 0.15 * confidence_weight)
-        return {
-            "emotion": emotion, "score": round(final_score, 3),
-            "valence": round(fused_valence, 3), "arousal": round(fused_arousal, 3),
-        }
-
-    def _infer_emotion_from_va(self, valence: float, arousal: float) -> str:
-        if arousal >= 0:
-            return "开心" if valence >= 0 else ("愤怒" if arousal > 0.3 else "惊讶")
-        else:
-            return "平静" if valence >= 0 else ("悲伤" if arousal < -0.3 else "焦虑")
+def get_analyzer() -> DeepFaceAnalyzer:
+    """获取全局 DeepFace 分析器单例。"""
+    global _analyzer
+    if _analyzer is None:
+        _analyzer = DeepFaceAnalyzer()
+    return _analyzer

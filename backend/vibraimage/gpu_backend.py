@@ -173,7 +173,7 @@ def histogram(x, bins=100, range=None, weights=None):
     # 无weights，使用torch.histc
     import torch
     range_min, range_max = range if range else (float(x.min()), float(x.max()))
-    hist = torch.histc(x, bins=bins, min=range_min, max=range_max)
+    hist = torch.histc(to_gpu(x), bins=bins, min=range_min, max=range_max)
     edges = torch.linspace(range_min, range_max, bins + 1)
     return hist, edges
 

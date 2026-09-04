@@ -10,6 +10,8 @@
 VibraImage产品使用前置摄像头捕捉人脸，本模块提供等效功能。
 """
 
+from __future__ import annotations
+
 import cv2
 try:
     import cv2.data  # opencv>=4.12 需要显式导入 data 子模块（否则 cv2.data 不可用）

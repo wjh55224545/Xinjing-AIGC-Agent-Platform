@@ -3,7 +3,7 @@
 """
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import numpy as np
 from backend.vibraimage.core.histogram import HistogramStats, FrequencyHistogram
@@ -64,20 +64,20 @@ def make_test_per_line() -> PerLineStats:
 def test_e1_aggression():
     """E1 = F_max × σ / (2 × F_in) × 100%"""
     hist = make_test_histogram()
-    e1 = compute_aggression(hist, frame_rate=30.0)
+    e1 = compute_aggression(hist, f_in=10.0)
     assert 0 <= e1 <= 100, f"E1 out of range: {e1}"
     print(f"  E1 = {e1:.2f}% (F_max={hist.F_max:.2f}, σ={hist.sigma:.2f})")
     print("[PASS] test_e1_aggression passed")
 
 
 def test_e2_stress():
-    """E2: 完全对称 → 接近100%, 不对称 → 降低"""
+    """E2: 完全对称 → 接近0%, 不对称 → 升高"""
     per_line = make_test_per_line()
     e2 = compute_stress(per_line)
     assert 0 <= e2 <= 100, f"E2 out of range: {e2}"
     print(f"  E2 = {e2:.2f}%")
 
-    # 完全对称应该接近100%
+    # 完全对称应该接近0%
     n = 10
     identical = np.ones(n, dtype=np.float32) * 10.0
     symmetric = PerLineStats(
@@ -88,8 +88,19 @@ def test_e2_stress():
         n_lines=n,
     )
     e2_sym = compute_stress(symmetric)
-    assert e2_sym > 90, f"Symmetry should give high E2, got {e2_sym}"
+    assert e2_sym < 1, f"Symmetry should give low E2, got {e2_sym}"
     print(f"  完全对称 E2 = {e2_sym:.2f}%")
+
+    asymmetric = PerLineStats(
+        A_L=identical.copy(), A_R=identical.copy() * 0.2,
+        F_L=identical.copy() * 2, F_R=identical.copy() * 0.4,
+        W_L=identical.copy(), W_R=identical.copy() * 0.2,
+        C_L=identical.copy() * 2, C_R=identical.copy() * 0.4,
+        n_lines=n,
+    )
+    e2_asym = compute_stress(asymmetric)
+    assert e2_asym > e2_sym, f"Asymmetry should increase E2: {e2_asym} vs {e2_sym}"
+    print(f"  明显不对称 E2 = {e2_asym:.2f}%")
     print("[PASS] test_e2_stress passed")
 
 
@@ -134,22 +145,25 @@ def test_e4_suspect():
 
 
 def test_e5_balance():
-    """E5 = 100 - 2 × Va"""
+    """E5 = (100 - 2 × Va)%"""
     e5 = compute_balance(0.0)  # 零变异性 → 100%
-    assert e5 > 95, f"Zero variability should give high balance, got {e5}"
+    assert abs(e5 - 100.0) < 0.01, f"Zero variability should give 100 balance, got {e5}"
     print(f"  E5 (零变异性) = {e5:.2f}%")
 
-    e5_high = compute_balance(0.5)  # 高变异性 → 低平衡
+    e5_high = compute_balance(30.0)  # 高变异性 (Va=30) → 低平衡
     assert e5_high < 50, f"High variability should give low balance, got {e5_high}"
     print(f"  E5 (高变异性) = {e5_high:.2f}%")
     print("[PASS] test_e5_balance passed")
 
 
 def test_e7_energy():
-    """E7 = (M - σ) / F_ps"""
-    e7_high = compute_energy(100, 5, 10)   # 高峰值低离散 → 高活力
-    e7_low = compute_energy(10, 20, 10)    # 低峰值高离散 → 低活力
-    assert e7_high > e7_low, f"E7: high count should > low count: {e7_high} vs {e7_low}"
+    """E7 = (M - σ) / F_ps × 100%，M 为归一化峰值密度百分比"""
+    # 高峰值密度低离散 → 高活力
+    e7_high = compute_energy(4000, 0.5, 10.0, total_pixels=50000)
+    # 低峰值密度高离散 → 低活力
+    e7_low = compute_energy(2000, 3.0, 10.0, total_pixels=50000)
+    assert e7_high > e7_low, f"E7: high density should > low density: {e7_high} vs {e7_low}"
+    assert 0 <= e7_high <= 100 and 0 <= e7_low <= 100
     print(f"  E7 (高活力) = {e7_high:.2f}%, E7 (低活力) = {e7_low:.2f}%")
     print("[PASS] test_e7_energy passed")
 
@@ -211,7 +225,7 @@ def test_all_outputs_in_range():
         'E4': compute_suspect(e1, e2, e3),
         'E5': compute_balance(0.1),
         'E6': compute_charm(per_line.W_L, per_line.W_R, per_line.C_L, per_line.C_R, per_line.n_lines),
-        'E7': compute_energy(hist.count_max, hist.sigma, 10.0),
+        'E7': compute_energy(hist.count_max, hist.sigma, 10.0, total_pixels=hist.total_pixels),
         'E8': compute_self_regulation(60, 10, 50, 10),
         'E9': compute_inhibition(0.1, 3.3),
         'E11': compute_depression(hist.sigma, hist.M),
