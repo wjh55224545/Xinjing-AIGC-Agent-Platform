@@ -77,7 +77,9 @@ def compute_balance(variability_sum: float) -> float:
     balance : float
         平衡参数 [0-100]%。
     """
-    balance = 100.0 - 2.0 * variability_sum * 100.0
+    # 方程(7): E5 = (100 − 2·Va)%，Va 为各情绪参数变异系数之和 (无量纲)。
+    # 注意: 无额外的 ×100，Va 已是 SD/M 的比值之和。
+    balance = 100.0 - 2.0 * variability_sum
     return float(np.clip(balance, 0.0, 100.0))
 
 
@@ -91,6 +93,7 @@ def compute_charm(
     per_line_C_L: np.ndarray,
     per_line_C_R: np.ndarray,
     n_lines: int,
+    freq_scale: float = 25.5,
 ) -> float:
     """
     计算E6 — Charm/Charisma (魅力)。
@@ -112,11 +115,13 @@ def compute_charm(
     Parameters
     ----------
     per_line_W_L, per_line_W_R : np.ndarray
-        每行左右侧振幅分量均值。
+        每行左右侧振幅分量均值 (0-255 量纲)。
     per_line_C_L, per_line_C_R : np.ndarray
-        每行左右侧频率分量最大值。
+        每行左右侧频率分量最大值 (Hz, 0-10 量纲)。
     n_lines : int
         有效行数。
+    freq_scale : float
+        频率分量换算到 0-255 量纲的缩放系数 (= 255 / freq_band_max)。
 
     Returns
     -------
@@ -127,10 +132,17 @@ def compute_charm(
         return 50.0
 
     N = float(n_lines)
+    # W 分量 (振幅) 与分母 255 同量纲；C 分量 (频率, Hz 0-10) 与 255 量纲不符。
+    # 方程(8) 的分母 255 隐含 W、C 均在 8-bit 灰度量纲，故将 C 按
+    # freq_scale = 255 / freq_band_max 换算到 0-255 后再与 W 取 max。
+    # (该内容未在项目参考资料中找到 C 分量归一化的显式说明，为通用量纲一致性工程校准)
+    C_L_scaled = per_line_C_L * freq_scale
+    C_R_scaled = per_line_C_R * freq_scale
+
     # 每行的L/R差异: max(|W_L-W_R|, |C_L-C_R|)
     line_diffs = np.maximum(
         np.abs(per_line_W_L - per_line_W_R),
-        np.abs(per_line_C_L - per_line_C_R),
+        np.abs(C_L_scaled - C_R_scaled),
     )
 
     asymmetry_sum = np.sum(line_diffs)
@@ -147,6 +159,7 @@ def compute_energy(
     count_max: float,
     sigma: float,
     F_ps: float,
+    total_pixels: float = 0.0,
 ) -> float:
     """
     计算E7 — Energy (活力/能量)。
@@ -157,7 +170,7 @@ def compute_energy(
     其中:
         M = 频率直方图峰值计数值 (count_max)
         σ = 频率直方图标准差 [Hz]
-        F_ps = 输入频率最大值 (通常为f_max)
+        F_ps = 输入频率最大值 [Hz]
 
     物理含义 (p91-92):
         - 与Aggression同源(频率直方图)
@@ -167,21 +180,33 @@ def compute_energy(
     Parameters
     ----------
     count_max : float
-        频率直方图峰值计数值。
+        频率直方图峰值计数值 (原始像素计数)。
     sigma : float
         频率直方图标准差 [Hz]。
     F_ps : float
-        最大输入频率 [Hz]。
+        最大输入频率 [Hz] (取有效频段上界, 通常为10Hz)。
+    total_pixels : float
+        有效像素总数, 用于将峰值计数归一化为相对密度。
 
     Returns
     -------
     energy : float
         活力参数 [0-100]%。
+
+    Notes
+    -----
+    VCE.pdf 方程(9) 未明确直方图"计数"的归一化方式。原始像素计数
+    (~10^3) 与 σ(Hz)、F_ps(Hz) 量纲不匹配会导致饱和到 100%。
+    本实现将峰值计数归一化为"峰值密度百分比" M = count_max/total_pixels×100
+    (∈[0,100])，使其与 σ(Hz) 处于可比量级。此为无资料支撑的工程校准，
+    以 NORMAL_NORMS['energy']≈23.82 为标定目标 (此前误用 46.11 旧常模)。
     """
-    if F_ps <= 0:
+    if F_ps <= 0 or total_pixels <= 0:
         return 0.0
 
-    energy = (count_max - sigma) / F_ps * 100.0
+    # 归一化峰值计数 → 峰值密度百分比 (工程校准: ×100 将比例换算为百分数)
+    M = count_max / total_pixels * 100.0
+    energy = (M - sigma) / F_ps * 100.0
     return float(np.clip(energy, 0.0, 100.0))
 
 
@@ -298,7 +323,9 @@ def compute_neuroticism(e9_std: float) -> float:
     neuroticism : float
         神经质参数 [0-100]% (可超过100%)。
     """
-    neuroticism = 10.0 * e9_std * 100.0
+    # 方程(12): E10 = 10·σ(E9)。σ(E9) 已为百分数 (与 E9 同量纲)，
+    # 故无需再 ×100 (原实现多乘了一个 ×100，导致量级错误)。
+    neuroticism = 10.0 * e9_std
     return max(0.0, neuroticism)  # 不clip上界，专著明确说可超过100%
 
 

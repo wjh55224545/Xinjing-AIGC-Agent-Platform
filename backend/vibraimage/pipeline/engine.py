@@ -64,6 +64,9 @@ class WindowResult:
     energy: float           # E7 (可从单窗口直方图计算)
     depression: float       # E11 (可从单窗口直方图计算)
 
+    # F1 — vibraimage 变化频率 (前庭图时间频率, 用于 E9/E10)
+    f1: float
+
     # 频率直方图统计
     hist_stats: HistogramStats = field(repr=False)
 
@@ -80,6 +83,7 @@ class WindowResult:
             'suspect': self.suspect,
             'energy': self.energy,
             'depression': self.depression,
+            'f1': self.f1,
             'hist_M': self.hist_stats.M,
             'hist_sigma': self.hist_stats.sigma,
             'hist_F_max': self.hist_stats.F_max,
@@ -359,6 +363,9 @@ class VibraImageEngine:
         # b. 逐像素频率分析
         freq_result = self.freq_analyzer.analyze(diff_seq)
 
+        # b2. F1 参数 — 前庭图时间频率 (帧差分空间均值一维序列主频)
+        f1 = self.freq_analyzer.compute_f1_frequency(diff_seq)
+
         # c. 频率直方图
         hist_stats = self.histogram.build(freq_result.freq_map)
 
@@ -378,7 +385,7 @@ class VibraImageEngine:
         # f. 计算基础情绪参数
         e1, e2, e3 = compute_primary_emotions(
             hist_stats, per_line, power_spectrum,
-            frame_rate=self.frame_rate,
+            f_in=FREQ_BAND[1],  # 方程(3) F_in 取有效频段上界 10Hz (见 primary.py)
             high_freq_threshold=TENSION_HIGH_FREQ_THRESHOLD,
             freq_band=FREQ_BAND,
         )
@@ -386,8 +393,11 @@ class VibraImageEngine:
         # g. 窗口内可计算的派生参数
         e4 = compute_suspect(e1, e2, e3)
 
-        F_ps = hist_stats.F_max if hist_stats.F_max > 0 else FREQ_BAND[1]
-        e7 = compute_energy(hist_stats.count_max, hist_stats.sigma, F_ps)
+        F_ps = FREQ_BAND[1]  # 输入频率最大值 = 有效频段上界 (10 Hz)
+        e7 = compute_energy(
+            hist_stats.count_max, hist_stats.sigma, F_ps,
+            total_pixels=hist_stats.total_pixels,
+        )
 
         e11 = compute_depression(
             hist_stats.sigma, hist_stats.M,
@@ -403,6 +413,7 @@ class VibraImageEngine:
             suspect=e4,
             energy=e7,
             depression=e11,
+            f1=f1,
             hist_stats=hist_stats,
             per_line_stats=per_line,
         )
@@ -428,14 +439,22 @@ class VibraImageEngine:
         total_lines = sum(w.per_line_stats.n_lines for w in window_results if w.per_line_stats is not None)
 
         if total_lines > 0 and len(all_W_L) == total_lines:
-            charm = compute_charm(all_W_L, all_W_R, all_C_L, all_C_R, total_lines)
+            freq_scale = 255.0 / FREQ_BAND[1]  # C 分量 (Hz) → 0-255 量纲
+            charm = compute_charm(
+                all_W_L, all_W_R, all_C_L, all_C_R, total_lines,
+                freq_scale=freq_scale,
+            )
         else:
             charm = 50.0
 
         # E5 Balance — 各参数变异系数之和
-        # 取E1,E2,E3,E7,E11的窗口间变异性 (这5个参数可逐窗口计算)
-        param_names = ['E1', 'E2', 'E3', 'E7', 'E11']
-        param_series = [e1_series, e2_series, e3_series, e7_series, e11_series]
+        # 取E1,E2,E3,E4,E7,E11的窗口间变异性 (这6个参数可逐窗口计算)
+        # 已知局限 (非公式 bug): Va 只累加 6 个逐窗参数，正性/生理参数
+        # (E5,E6,E8,E9,E10,E12) 在当前架构每会话只算一次，无逐窗时间序列，
+        # 无法进入 Va。短时稳定视频里 Va 天然偏小 → balance 饱和 ~97 (常模 61.64)。
+        # 修复需「逐窗计算 E5/E6/E8/E9/E10/E12」的大改，列为后续可选改进。
+        param_names = ['E1', 'E2', 'E3', 'E4', 'E7', 'E11']
+        param_series = [e1_series, e2_series, e3_series, e4_series, e7_series, e11_series]
 
         variability_sum = 0.0
         for name, series in zip(param_names, param_series):
@@ -446,6 +465,10 @@ class VibraImageEngine:
         balance = compute_balance(variability_sum)
 
         # E8 Self-Regulation
+        # 已知局限 (非公式 bug): 方程(10) 需要 ΔE5/ΔE6 (Balance/Charm 在测量期间的变化范围)，
+        # 但当前架构 Balance/Charm 每会话只有一个标量值，无逐窗时间序列。
+        # 故用 E1 极差代理 ΔE5、ΔE6=0，导致 self_regulation 饱和 ~87 (常模 66.87)。
+        # 修复需逐窗计算 E5/E6 (与 balance 同源)，列为后续可选改进。
         e5_range = float(np.max(e1_series) - np.min(e1_series))  # 用E1波动近似ΔE5
         e6_series = np.ones(n) * charm  # Charm暂时用标量
         e6_range = 0.0
@@ -458,22 +481,25 @@ class VibraImageEngine:
             charm, e6_actual_range,
         )
 
-        # E9 Inhibition — 基于F1平均周期
-        # F1 ≈ 帧差分量均值的变化周期
-        # 简化: 用过零率计算F1的主导周期
+        # E9 Inhibition — 基于真 F1 平均周期
+        # F1 = 前庭图 (帧差分空间均值一维序列) 的时间频率 (VCE 方程(11), p99)
+        # T = 单窗口测量周期 (VCE p99: "measured by default for 100 frames")
+        T_window = self.window_frames / self.frame_rate
+        # F1 周期须能在单窗口内被采样到: F1 >= 1/T_window (窗口频率分辨率)。
+        # 低于此值的 F1 属欠采样估计，钳位到窗口分辨率。
+        F1_min = self.frame_rate / self.window_frames
         f1_samples = []
         for w in window_results:
-            if w.hist_stats.F_max > 0:
-                f1_samples.append(1.0 / max(w.hist_stats.F_max, 0.1))
-        T_m = np.mean(f1_samples) if f1_samples else 0.1
-        T_total = n * self.window_frames / self.frame_rate  # 总时长
-        inhibition = compute_inhibition(T_m, T_total)
+            if w.f1 > 0:
+                f1_samples.append(1.0 / max(w.f1, F1_min))
+        T_m = np.mean(f1_samples) if f1_samples else 1.0 / F1_min
+        inhibition = compute_inhibition(T_m, T_window)
 
-        # E10 Neuroticism
+        # E10 Neuroticism = 10·σ(E9)，E9_i 按单窗周期计算 (百分数)
         e9_per_window = []
         for w in window_results:
-            if w.hist_stats.F_max > 0:
-                e9_per_window.append(1.0 / max(w.hist_stats.F_max, 0.1) / T_total * 100.0)
+            if w.f1 > 0:
+                e9_per_window.append(1.0 / max(w.f1, F1_min) / T_window * 100.0)
         e9_std = np.std(e9_per_window) if len(e9_per_window) > 1 else 0.0
         neuroticism = compute_neuroticism(e9_std)
 

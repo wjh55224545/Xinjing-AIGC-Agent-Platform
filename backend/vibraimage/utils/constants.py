@@ -24,10 +24,9 @@ DEFAULT_WINDOW_STRIDE = 50       # 窗口步长 (50%重叠)
 FREQ_BINS = 100                  # 频率直方图bin数
 FACE_ROI_SIZE = (224, 224)       # 人脸ROI缩放尺寸
 
-# E3高频阈值 — 专著p76描述Tension"characterizes high-frequency processes
-# of movement with a frequency of 30 Hz"，但由于有效频段为0.1-10Hz，
-# 且EEG类比中使用f_max/2作为高频分界，默认取频段中位值3Hz
-TENSION_HIGH_FREQ_THRESHOLD = 3.0
+# E3高频阈值 — VCE.pdf p75 方程(5)高频段为 fmax/2 到 fmax。
+# 当前有效频段上界 fmax=10Hz，因此阈值取 5Hz。
+TENSION_HIGH_FREQ_THRESHOLD = FREQ_BAND[1] / 2.0
 
 # E11的病理偏移常数 (p108: "coefficient of 0.5 Hz in the denominator
 # of the calculation, as a threshold value of vibration frequency SD,
@@ -46,54 +45,54 @@ DIFF_NOISE_THRESHOLD = 1.0
 
 NORMAL_NORMS = {
     # 负性情绪参数
-    'aggression': 40.51,         # E1 — Table 6 (p63), M for All
+    'aggression': 41.99,         # E1 — Table 6 (p63), M for All
     'stress': 31.17,             # E2 — Table 8 (p73), M for All
     'tension': 30.46,            # E3 — Table 9 (p77), M for All
-    'suspicious': 28.33,         # E4 — Table 10 (p81), M for All
+    'suspicious': 34.68,         # E4 — Table 10 (p81), M for All
 
     # 正性情绪参数
     'balance': 61.64,            # E5 — Table 11 (p85), M for All
-    'charm': 56.42,              # E6 — Table 12 (p89), M for All
-    'energy': 46.11,             # E7 — Table 13 (p93), M for All
-    'self_regulation': 55.25,    # E8 — Table 14 (p97), M for All
+    'charm': 68.20,              # E6 — Table 12 (p89), M for All
+    'energy': 23.82,             # E7 — Table 13 (p93), M for All
+    'self_regulation': 66.87,    # E8 — Table 14 (p97), M for All
 
     # 生理情绪参数
-    'inhibition': 24.87,         # E9 — Table 15 (p101), M for All
+    'inhibition': 17.85,         # E9 — Table 15 (p101), M for All
     'neuroticism': 31.34,        # E10 — Table 16 (p106), M for All
-    'depression': 31.17,         # E11 — Table 17 (p110), M for All
-    'happiness': 49.81,          # E12 — Table 18 (p114), M for All
+    'depression': 28.35,         # E11 — Table 17 (p110), M for All
+    'happiness': 34.59,          # E12 — Table 18 (p114), M for All
 }
 
 # 参数标准差 (来自VCE.pdf各Table的SD)
 NORMAL_SDS = {
-    'aggression': 7.25,          # Table 6
+    'aggression': 9.00,          # Table 6
     'stress': 7.54,              # Table 8
     'tension': 8.53,             # Table 9
-    'suspicious': 6.28,          # Table 10
+    'suspicious': 4.96,          # Table 10
     'balance': 10.58,            # Table 11
-    'charm': 13.09,              # Table 12
-    'energy': 14.56,             # Table 13
-    'self_regulation': 14.37,    # Table 14
-    'inhibition': 11.33,         # Table 15
+    'charm': 11.40,              # Table 12
+    'energy': 9.10,              # Table 13
+    'self_regulation': 12.76,    # Table 14
+    'inhibition': 4.59,          # Table 15
     'neuroticism': 12.80,        # Table 16
-    'depression': 8.05,          # Table 17
-    'happiness': 9.68,           # Table 18
+    'depression': 5.59,          # Table 17
+    'happiness': 10.75,          # Table 18
 }
 
 # 标准化因子 (用于K值计算: m = 1/SD)
 STANDARDIZATION_FACTORS = {
-    'aggression': 1 / 7.25,
+    'aggression': 1 / 9.00,
     'stress': 1 / 7.54,
     'tension': 1 / 8.53,
-    'suspicious': 1 / 6.28,
+    'suspicious': 1 / 4.96,
     'balance': 1 / 10.58,
-    'charm': 1 / 13.09,
-    'energy': 1 / 14.56,
-    'self_regulation': 1 / 14.37,
-    'inhibition': 1 / 11.33,
+    'charm': 1 / 11.40,
+    'energy': 1 / 9.10,
+    'self_regulation': 1 / 12.76,
+    'inhibition': 1 / 4.59,
     'neuroticism': 1 / 12.80,
-    'depression': 1 / 8.05,
-    'happiness': 1 / 9.68,
+    'depression': 1 / 5.59,
+    'happiness': 1 / 10.75,
 }
 
 # ============================================================================

@@ -51,12 +51,14 @@ def compute_stability(hist_stats: HistogramStats) -> float:
     y_normal = stats.norm.pdf(x, loc=hist_stats.M, scale=sigma)
     y_normal_scaled = y_normal * (total / max(np.sum(y_normal), 1e-10))
 
-    # K = Σ y'(x) / Σ y(x) (方程16)
-    # 等价于 1 - L1_norm(y_actual, y_normal)
-    l1_norm = np.sum(np.abs(y_actual - y_normal_scaled)) / total
-    stability = max(0.0, (1.0 - l1_norm) * 100.0)
+    # 方程(16): P14 = K × 100%，K = Σ y'(x) / Σ y(x)，
+    # 其中 y'(x) 为归一化到与实际直方图同总和的 N(M, σ²) 正态密度。
+    # 用重叠比 Σ min(y, y') / Σ y 度量"实际分布与正态分布的相似度"，
+    # 恒∈[0,1] (不会像 L1 距离那样对尖峰直方图取负)。
+    overlap = np.sum(np.minimum(y_actual, y_normal_scaled)) / total
+    stability = float(np.clip(overlap * 100.0, 0.0, 100.0))
 
-    return float(np.clip(stability, 0.0, 100.0))
+    return stability
 
 
 def compute_satisfaction(

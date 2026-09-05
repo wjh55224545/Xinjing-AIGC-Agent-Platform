@@ -19,8 +19,8 @@ from typing import Dict, List, Optional, Tuple
 @dataclass
 class EmotionResult:
     """单次情绪映射结果。"""
-    valence: float             # 效价 [0, 1]
-    arousal: float             # 唤醒度 [0, 1]
+    valence: float             # 效价 [-1, 1], 0 为中性
+    arousal: float             # 唤醒度 [-1, 1], 0 为中等
     intensity: float           # 情绪强度 [0, 1]
     emotion_id: int            # 情绪类别编号 0-10 (0=中性/未分类)
     emotion_label: str         # 中文标签
@@ -60,7 +60,7 @@ class EmotionMapper:
         'aggression': 'aggression', 'E1': 'aggression',
         'stress': 'stress', 'E2': 'stress',
         'tension': 'tension', 'E3': 'tension',
-        'suspicious': 'suspicious', 'E4': 'suspicious',
+        'suspicious': 'suspicious', 'suspect': 'suspicious', 'E4': 'suspicious',
         'balance': 'balance', 'E5': 'balance',
         'charm': 'charm', 'E6': 'charm',
         'energy': 'energy', 'E7': 'energy',
@@ -107,8 +107,18 @@ class EmotionMapper:
         self.norm_sds = np.array([NORMAL_SDS[p] for p in self._PARAM_ORDER])
 
     def _standardize_12d(self, scores: Dict[str, float]) -> np.ndarray:
-        """将E1-E12字典转为z-score（基于VCE常模均值和SD）。"""
-        raw = np.array([scores.get(self._KEY_MAP.get(p, p), self.norm_means[i])
+        """将E1-E12字典转为z-score（基于VCE常模均值和SD）。
+
+        先通过 _KEY_MAP 把输入键名标准化（兼容 'suspect'/'suspicious'、
+        'E1'~'E12' 等别名），再按 _PARAM_ORDER 取值，缺省回退常模均值。
+        """
+        normalized: Dict[str, float] = {}
+        for key, value in scores.items():
+            canonical = self._KEY_MAP.get(key, key)
+            if canonical in self._PARAM_ORDER:
+                normalized[canonical] = value
+
+        raw = np.array([normalized.get(p, self.norm_means[i])
                         for i, p in enumerate(self._PARAM_ORDER)])
         return (raw - self.norm_means) / self.norm_sds
 
@@ -142,11 +152,15 @@ class EmotionMapper:
         v_raw -= np.clip(K * 0.016, -0.08, 0.08)
 
         # sigmoid 压缩，temperature防止极端饱和
-        valence = 1.0 / (1.0 + np.exp(-v_raw / self.TEMPERATURE))
-        arousal = 1.0 / (1.0 + np.exp(-a_raw / self.TEMPERATURE))
+        valence_01 = 1.0 / (1.0 + np.exp(-v_raw / self.TEMPERATURE))
+        arousal_01 = 1.0 / (1.0 + np.exp(-a_raw / self.TEMPERATURE))
 
-        # 强度 = 唤醒度 × 效价偏离中性的程度
-        intensity = arousal * abs(valence - 0.5) * 2.0
+        # 转换为 [-1, 1] 尺度 (Russell 1980 对称定义)
+        valence = 2.0 * valence_01 - 1.0
+        arousal = 2.0 * arousal_01 - 1.0
+
+        # 强度 = |唤醒度| × |效价|（中性点 0 处强度为 0）
+        intensity = abs(arousal) * abs(valence)
 
         return float(valence), float(arousal), float(intensity)
 
@@ -193,7 +207,7 @@ class EmotionMapper:
                 best_label_en = region['label_en']
                 best_id = int(eid_str.split('_')[0]) if eid_str[0].isdigit() else 0
 
-        if best_dist > 0.5:
+        if best_dist > 1.0:
             best_label = self.default_emotion
             best_label_en = self.default_emotion_en
             best_id = 0

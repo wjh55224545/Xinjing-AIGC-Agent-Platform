@@ -1,9 +1,15 @@
-# E1-E12 → 效价(Valence) / 唤醒度(Arousal) 权重矩阵
-# 基于VCE专著中各参数的心理学语义设定（初始猜测值）
+# E1-E12 -> 效价 (Valence) / 唤醒度 (Arousal) 权重矩阵
+# 基于 VCE 专著中各参数的心理学语义设定（初始猜测值）
 # 通过 calibrate.py 可用标注数据校正（Pearson r）
 #
-# 效价: 正性=[0,1], 越高越积极
-# 唤醒度: 激活程度=[0,1], 越高越兴奋/紧张
+# 效价：正性=[0,1], 越高越积极
+# 唤醒度：激活程度=[0,1], 越高越兴奋/紧张
+#
+# 2026-08-27 修正：E5 Balance / E6 Charm / E8 Self-Regulation 在原著中
+# 主要表示稳定性、左右对称性、自我调节能力；它们是“负性风险的保护项”，
+# 不能等同于 E12 Happiness 这类直接正性情绪证据。因此将三者的直接
+# Valence 正权重从强证据降为弱保护项，避免 calm/relax 视频因 E5/E6/E8
+# 稳定而把 V_vi 推到接近 +1 的饱和区。
 
 weights:
   valence:
@@ -11,10 +17,10 @@ weights:
     stress:          -0.7
     tension:         -0.7
     suspicious:      -0.6
-    balance:          0.6
-    charm:            0.5
+    balance:          0.05
+    charm:            0.05
     energy:           0.3
-    self_regulation:  0.6
+    self_regulation:  0.05
     inhibition:      -0.3
     neuroticism:     -0.5
     depression:      -0.7
@@ -50,56 +56,57 @@ normalization:
   depression:      [7.0, 55.0]
   happiness:       [21.0, 79.0]
 
-# 10类情绪在效价-唤醒度二维空间中的定义区域
+# 10 类情绪在效价 - 唤醒度二维空间中的定义区域
+# 坐标已转换为 [-1, 1] 尺度 (原 [0,1] 坐标 * 2 - 1)
 emotion_regions:
-  calm_relaxed:        # ① 平静/放松 — center (~0.72, ~0.24)
-    valence:    [0.48, 0.96]
-    arousal:    [0.06, 0.42]
+  calm_relaxed:        # 平静/放松 — center (~0.44, ~-0.16)
+    valence:    [-0.04, 0.92]
+    arousal:    [-0.88, -0.16]
     label:      "平静/放松"
     label_en:   "calm_relaxed"
-  angry_irritable:     # ② 愤怒/烦躁 — center (~0.12, ~0.88)
-    valence:    [0.00, 0.24]
-    arousal:    [0.78, 0.98]
+  angry_irritable:     # 愤怒/烦躁 — center (~-0.76, ~0.76)
+    valence:    [-1.00, -0.52]
+    arousal:    [0.56, 0.96]
     label:      "愤怒/烦躁"
     label_en:   "angry_irritable"
-  anxious_worried:     # ③ 焦虑/担忧 — center (~0.22, ~0.70)
-    valence:    [0.00, 0.44]
-    arousal:    [0.56, 0.84]
+  anxious_worried:     # 焦虑/担忧 — center (~-0.56, ~0.40)
+    valence:    [-1.00, -0.12]
+    arousal:    [0.12, 0.68]
     label:      "焦虑/担忧"
     label_en:   "anxious_worried"
-  nervous_uneasy:      # ④ 紧张/不安 — center (~0.25, ~0.52)
-    valence:    [0.02, 0.48]
-    arousal:    [0.38, 0.66]
+  nervous_uneasy:      # 紧张/不安 — center (~-0.50, ~0.04)
+    valence:    [-0.96, -0.04]
+    arousal:    [-0.24, 0.32]
     label:      "紧张/不安"
     label_en:   "nervous_uneasy"
-  sad_low:             # ⑤ 低落/悲伤 — center (~0.18, ~0.38)
-    valence:    [0.00, 0.36]
-    arousal:    [0.32, 0.44]
+  sad_low:             # 低落/悲伤 — center (~-0.64, ~-0.24)
+    valence:    [-1.00, -0.28]
+    arousal:    [-0.36, -0.12]
     label:      "低落/悲伤"
     label_en:   "sad_low"
-  fatigued_exhausted:  # ⑥ 疲惫/倦怠 — center (~0.20, ~0.18)
-    valence:    [0.00, 0.40]
-    arousal:    [0.00, 0.36]
+  fatigued_exhausted:  # 疲惫/倦怠 — center (~-0.60, ~-0.64)
+    valence:    [-1.00, -0.20]
+    arousal:    [-1.00, -0.28]
     label:      "疲惫/倦怠"
     label_en:   "fatigued_exhausted"
-  focused_engaged:     # ⑦ 专注/投入 — center (~0.72, ~0.42)
-    valence:    [0.52, 0.92]
-    arousal:    [0.34, 0.50]
+  focused_engaged:     # 专注/投入 — center (~0.44, ~-0.16)
+    valence:    [0.04, 0.84]
+    arousal:    [-0.32, 0.00]
     label:      "专注/投入"
     label_en:   "focused_engaged"
-  happy_cheerful:      # ⑧ 愉悦/开心 — center (~0.80, ~0.54)
-    valence:    [0.60, 1.00]
-    arousal:    [0.42, 0.66]
+  happy_cheerful:      # 愉悦/开心 — center (~0.60, ~0.08)
+    valence:    [0.20, 1.00]
+    arousal:    [-0.16, 0.32]
     label:      "愉悦/开心"
     label_en:   "happy_cheerful"
-  excited_elated:      # ⑨ 兴奋/激动 — center (~0.80, ~0.80)
-    valence:    [0.60, 1.00]
-    arousal:    [0.68, 0.92]
+  excited_elated:      # 兴奋/激动 — center (~0.60, ~0.60)
+    valence:    [0.20, 1.00]
+    arousal:    [0.36, 0.84]
     label:      "兴奋/激动"
     label_en:   "excited_elated"
-  content_serene:      # ⑩ 满足/安详 — center (~0.80, ~0.18)
-    valence:    [0.62, 0.98]
-    arousal:    [0.00, 0.36]
+  content_serene:      # 满足/安详 — center (~0.60, ~-0.64)
+    valence:    [0.24, 0.96]
+    arousal:    [-1.00, -0.28]
     label:      "满足/安详"
     label_en:   "content_serene"
 

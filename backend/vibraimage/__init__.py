@@ -13,11 +13,11 @@ v0.2.0 更新:
     - L2: E1-E12 → Z-Score标准化 → 加权求和 → 效价/唤醒度 → 10类情绪分类
 
 使用方法:
-    from vibraimage.pipeline.engine import VibraImageEngine
+    from backend.vibraimage.pipeline.engine import VibraImageEngine
     engine = VibraImageEngine()
     results = engine.process_video("path/to/video.mp4")
 
-    from vibraimage.mapping.emotion_mapper import EmotionMapper
+    from backend.vibraimage.mapping.emotion_mapper import EmotionMapper
     mapper = EmotionMapper()
     emotion = mapper.map(results.to_dict()['emotions'], K=results.K_value)
 """
