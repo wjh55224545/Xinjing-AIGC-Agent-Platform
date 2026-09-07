@@ -1,5 +1,27 @@
 # 更新日志
 
+## v2.5.0（融合策略完整对比 / 经典实验工具箱 / CI / 边界测试 / 场景映射）— 2026-09-07
+
+### 融合策略完整消融（升级20）
+- 新增 `scripts/ablation/fusion_ablation_v2.py`：9 种方法完整对比（单模态 D-S ×3 / 双模态 D-S ×3 / 实时双模态置信度加权 / 三模态 D-S / 旧固定权重）
+- 合成被试 N=500：单模态最佳 79.0% → 实时双模态 81.0%（+3.4%）→ 三模态 D-S 81.4%；相对旧固定权重 +1.8%
+- README 消融数字与实际可复现值对齐（原不可复现的 +12.3%/+8.7% 已修正）
+
+### 经典实验工具箱（升级21）
+- `backend/services/classic_experiments.py` 新增 Flanker（Eriksen & Eriksen, 1974）/ Go-NoGo（Donders, 1868; Newman & Kosson, 1986）/ IAT（Greenwald et al., 1998/2003）
+- 新增 8 个 API 端点（生成试次 + 分析）
+- 新增前端页面 `ClassicExperimentsView.vue`：四实验页签 + 逐题作答 + 自动分析 + 结果导出
+
+### CI 自动化（升级22）
+- 新增 `.github/workflows/ci.yml`：push/PR 自动跑后端全量测试（Python 3.11 + requirements-ci.txt）+ 前端构建（Node 20 + npm ci）
+
+### 边界测试补齐（升级23）
+- 新增 `tests/test_upgrades20_24.py` 28 项（多模态融合置信度/权重/复核、实验空数据/极端输入、风险分级边界、18 剖面自动诊断）
+- 全量测试 **155 passed**（127 → 155）
+
+### 场景-功能-证据映射（升级24）
+- 新增 `docs/application_mapping.md`：4 个应用场景 × 功能模块 × 量化证据对照表，含数据与伦理边界说明
+
 ## v2.4.1（多模态融合 / GRM-CAT / 合成数据·信效度）— 2026-08-30
 
 ### 三模态 D-S 证据融合（升级1）
@@ -54,7 +76,7 @@
 - 新增 `docs/需求痛点分析报告.md`：五大核心痛点深度分析+目标用户+优先级矩阵+差异化优势（已移至本地）
 - 新增 `docs/教师需求问卷模板.md`：32题四部分问卷（基本信息/痛点评估/功能需求/使用意愿）（已移至本地）
 
-### 方案可行性补强（升级12）
+### 工程化部署补强（升级12）
 - 新增 `scripts/benchmark/performance_benchmark.py`：API响应时间+并发性能+核心算法效率基准测试
 - `DEPLOY.md` 追加：Nginx反向代理+HTTPS、systemd服务管理、日志监控、数据备份
 - `DEPLOY.md` 追加国产化适配：操作系统/CPU架构/数据库/中间件适配表+信创部署检查清单+性能参考

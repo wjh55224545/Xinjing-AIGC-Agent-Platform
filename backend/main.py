@@ -366,7 +366,6 @@ def health():
         "version": "2.4.0",
         "platform": platform_info,
         "model": model_info,
-        "competition": "第八届全球校园人工智能算法精英大赛 · AI+学科交叉",
     }
 
 

@@ -9,7 +9,8 @@ const routes = [
   { path: "/aigc", name: "AigcReport", component: () => import("../views/AigcReportView.vue") },
   { path: "/agents", name: "AgentPanel", component: () => import("../views/AgentPanelView.vue") },
   { path: "/scales", name: "ScalesView", component: () => import("../views/ScalesView.vue") },
-  { path: "/experiment", name: "ExperimentView", component: () => import("../views/ExperimentView.vue") },
+  { path: "/experiment", name: "ClassicExperiments", component: () => import("../views/ClassicExperimentsView.vue") },
+  { path: "/experiment-vibra", name: "VibraLab", component: () => import("../views/ExperimentView.vue") },
   { path: "/virtual-subject", name: "VirtualSubject", component: () => import("../views/VirtualSubjectView.vue") },
 ];
 

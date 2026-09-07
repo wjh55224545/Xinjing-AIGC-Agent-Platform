@@ -29,7 +29,7 @@
 - **前庭振动**：VibraImage 引擎分析头部微振动，E1-E12 情绪参数 + K 值
 - **实时融合（面部+前庭）**：置信度自适应加权——面部熵置信度 + 前庭窗口方差置信度动态分配权重，输出融合 V/A、情绪标签与模态一致性复核（不一致自动标记需复核）
 - **三模态 D-S 证据融合（面部+前庭+量表/CAT）**：Dempster-Shafer 证据理论，含未知焦点 Ω、置信度折扣与冲突检测，提供 `/fusion/three-modal` 与 `/fusion/two-modal` 端点（双模态端点用于消融对比）
-- 消融实验：三模态融合比最佳单模态准确率 **+12.3%**，比固定权重 **+8.7%**
+- 消融实验：多模态融合相对最佳单模态提升 **+2.4%~+4.6%**，实时双模态置信度加权相对单模态面部 **+3.4%**，证据融合相对旧固定权重 **+1.8%**（合成被试 N=500，脚本 `scripts/ablation/fusion_ablation_v2.py` 可复现）
 
 ### 🎯 分级响应模型自适应测验（GRM）
 - 基于 IRT 3PL + 分级响应模型（GRM），直接建模多级评分（1-4 分）
@@ -242,7 +242,8 @@ python scripts/benchmark/performance_benchmark.py --iterations 50 --concurrency 
 | [部署指南](DEPLOY.md) | 本地/Docker/云平台部署、Nginx 配置、国产化适配 |
 | [开发日志](DEVELOPMENT_LOG.md) | 全部功能升级的完整记录（技术背景、改动、验证） |
 | [变更日志](CHANGELOG.md) | 版本变更记录 |
-| [消融对照实验报告](docs/ablation_report.md) | 三模态融合消融实验方法与结果 |
+| [消融对照实验报告](docs/ablation_report.md) | 融合策略消融实验（单/双/三模态与实时加权对比） |
+| [场景-功能-证据映射](docs/application_mapping.md) | 应用场景、功能模块与量化证据对照 |
 | [自适应测验等价性报告](docs/cat_equivalence_report.md) | CAT 与全量表等价性验证 |
 | [情绪预测与异常检测报告](docs/emotion_forecast_report.md) | 预测/异常检测算法验证 |
 

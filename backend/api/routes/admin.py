@@ -214,7 +214,7 @@ async def export_data(
     return PlainTextResponse("\n".join(rows), media_type="text/csv")
 
 
-# ---- 试点工具链（应用效果证据采集） ----
+# ---- 试点数据导出工具 ----
 
 @router.get("/pilot/export", summary="导出试点数据（按班级/年级分组，CSV）")
 async def export_pilot_data(
@@ -265,11 +265,11 @@ async def export_pilot_data(
 @router.get("/pilot/compare", summary="试点对比指标（系统 vs 人工/传统）")
 async def pilot_compare():
     """
-    试点应用效果对比指标：
+    试点数据对比指标：
       - 计分耗时：系统自动计分 vs 人工计分（量表每题/整卷）
       - 量表覆盖率：有量表记录的学生占比
       - 情绪采集记录数：试点期内每人平均采集次数
-    用于量化「应用效果」证据（材料中标注口径与假设）。
+    用于评估试点数据采集质量。
     """
     from backend.database import SessionLocal
     from backend.models.student import Student

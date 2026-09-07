@@ -56,6 +56,7 @@ const titles = {
   AgentPanel: "多智能体协作",
   ScalesView: "心理量表自评",
   ExperimentView: "心理教学实验",
+  ClassicExperiments: "经典心理学实验",
   VirtualSubject: "虚拟被试教学演练",
 };
 const pageTitle = computed(() => titles[route.name] || "心镜");

@@ -1,0 +1,20 @@
+# CI 测试运行所需依赖（精简版，不含 deepface/tensorflow/ultralytics 等重型推理库）
+# 全量部署依赖见 requirements.txt
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+sqlalchemy>=2.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+langchain>=0.1.0
+langchain-openai>=0.1.0
+langgraph>=0.0.30
+apscheduler>=3.10.0
+python-multipart>=0.0.5
+httpx>=0.24.0
+pytest>=7.0.0
+opencv-python-headless>=4.5.0
+numpy>=1.21.0
+scipy>=1.7.0
+matplotlib>=3.3.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
