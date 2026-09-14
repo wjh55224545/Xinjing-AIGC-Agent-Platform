@@ -363,7 +363,7 @@ def health():
     return {
         "status": "ok",
         "service": "心镜·AIGC智能体平台",
-        "version": "2.4.0",
+        "version": "2.6.0",
         "platform": platform_info,
         "model": model_info,
     }

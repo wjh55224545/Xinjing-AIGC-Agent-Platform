@@ -162,6 +162,64 @@
         <button class="btn btn-primary" @click="reset" style="margin-top:16px">继续演示下一个</button>
       </div>
     </div>
+
+    <!-- 诊断算法校准（算法体检） -->
+    <div class="card">
+      <h2 style="margin:0 0 6px">🔬 诊断算法校准</h2>
+      <p class="text-muted" style="margin:0 0 14px">
+        用全部 {{ profiles.length }} 种虚拟被试批量运行自动诊断，评估灵敏度 / 特异度 / 量表与情绪一致率，
+        形成可复现的「算法体检」报告（全部为合成数据）。
+      </p>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn btn-primary" @click="runCalibration" :disabled="calibLoading">
+          {{ calibLoading ? "校准运行中…" : "运行算法校准" }}
+        </button>
+        <span class="text-muted">每剖面 10 个样本，共 180 个合成样本</span>
+      </div>
+
+      <div v-if="calibResult" class="calib-wrap">
+        <div class="calib-metrics">
+          <div class="calib-metric">
+            <div class="calib-num">{{ calibResult.overall_scale_accuracy }}%</div>
+            <div class="calib-label">量表等级一致率</div>
+          </div>
+          <div class="calib-metric">
+            <div class="calib-num">{{ calibResult.overall_emotion_accuracy }}%</div>
+            <div class="calib-label">情绪判定一致率</div>
+          </div>
+          <div class="calib-metric">
+            <div class="calib-num">{{ calibResult.sensitivity }}%</div>
+            <div class="calib-label">灵敏度（阳性检出）</div>
+          </div>
+          <div class="calib-metric">
+            <div class="calib-num">{{ calibResult.specificity }}%</div>
+            <div class="calib-label">特异度（阴性正确）</div>
+          </div>
+          <div class="calib-metric">
+            <div class="calib-num">{{ calibResult.boundary_cases }}</div>
+            <div class="calib-label">边界案例（≥2级差）</div>
+          </div>
+        </div>
+        <p class="calib-interp">{{ calibResult.interpretation }}</p>
+
+        <h5 style="margin:14px 0 8px">各剖面明细（按量表一致率升序）</h5>
+        <table class="diag-table">
+          <thead>
+            <tr><th>剖面</th><th>样本</th><th>量表一致率</th><th>情绪一致率</th><th>平均判定等级</th><th>边界案例</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="d in calibResult.profile_details" :key="d.profile_id">
+              <td>{{ d.profile_name }}</td>
+              <td>{{ d.n }}</td>
+              <td>{{ d.scale_accuracy }}%</td>
+              <td>{{ d.emotion_accuracy }}%</td>
+              <td>{{ d.mean_level_rank }}（真值 {{ d.mean_true_rank }}）</td>
+              <td>{{ d.boundary_cases }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -174,6 +232,8 @@ const currentCase = ref(null);
 const diagResult = ref(null);
 const generating = ref(false);
 const diagnosing = ref(false);
+const calibLoading = ref(false);
+const calibResult = ref(null);
 
 onMounted(async () => {
   try {
@@ -214,6 +274,20 @@ async function runDiagnosis() {
 function reset() {
   currentCase.value = null;
   diagResult.value = null;
+}
+
+async function runCalibration() {
+  calibLoading.value = true;
+  try {
+    const resp = await axios.get("/api/virtual-subjects/calibration", {
+      params: { seed: 42, n_per_profile: 10 },
+    });
+    calibResult.value = resp.data.data;
+  } catch (e) {
+    alert("运行算法校准失败：" + (e.response?.data?.detail || e.message));
+  } finally {
+    calibLoading.value = false;
+  }
 }
 
 function sumAnswers(arr) { return arr.reduce((s, v) => s + v, 0); }
@@ -315,4 +389,11 @@ function severityText(s) {
 .verdict { padding: 2px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; margin-right: 8px; }
 .verdict.ok { background: #d1fae5; color: #059669; }
 .verdict.diff { background: #fef3c7; color: #d97706; }
+
+.calib-wrap { border-top: 1px dashed var(--border, #e5e7eb); padding-top: 16px; }
+.calib-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.calib-metric { background: var(--section-bg, #f9fafb); border-radius: 12px; padding: 14px 10px; text-align: center; }
+.calib-num { font-size: 24px; font-weight: 700; color: #6366f1; }
+.calib-label { font-size: 12px; color: var(--text-muted, #6b7280); margin-top: 4px; }
+.calib-interp { font-size: 13px; line-height: 1.7; color: var(--text, #4b5563); background: rgba(99,102,241,0.06); border-left: 3px solid #6366f1; border-radius: 6px; padding: 10px 14px; margin: 14px 0 0; }
 </style>

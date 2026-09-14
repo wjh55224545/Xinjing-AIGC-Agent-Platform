@@ -15,10 +15,6 @@
       </nav>
       <div class="sidebar-footer">
         <div class="footer-version">v2.1 · 心理健康评估平台</div>
-        <div class="footer-status">
-          <span class="status-dot"></span>
-          系统运行中
-        </div>
       </div>
     </aside>
 
@@ -29,7 +25,6 @@
         </div>
         <div class="header-right">
           <span class="header-time">{{ currentTime }}</span>
-          <span class="status"><span class="dot"></span>在线</span>
         </div>
       </header>
       <div class="page">
@@ -86,21 +81,6 @@ onUnmounted(() => { if (timer) clearInterval(timer); });
   color: rgba(200, 214, 229, 0.5);
   letter-spacing: 0.05em;
   margin-bottom: 6px;
-}
-.footer-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: rgba(200, 214, 229, 0.7);
-}
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
-  animation: pulse 2s infinite;
 }
 @keyframes pulse {
   0%, 100% { opacity: 1; }

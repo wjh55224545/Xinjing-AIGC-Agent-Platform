@@ -1,4 +1,4 @@
-# 心镜 MindMirror
+﻿# 心镜 MindMirror
 
 > 面向学生心理健康的智能评估与诊断平台 — 多模态情绪识别 + 自适应测验 + 虚拟被试合成数据 + 情绪预测预警
 
@@ -41,6 +41,7 @@
 - 参数化生成完整量表作答 + E1-E12 前庭参数 + K 值，**隐藏真值**
 - **用途一（核心）**：为诊断算法提供可复现的合成数据源——消融实验、信效度验证、等价性验证均基于此
 - **用途二**：在无真实数据时演示完整诊断流程，保证系统可演示、结果可复现
+- **用途三**：诊断算法校准（算法体检）——批量评估自动诊断的灵敏度 / 特异度 / 量表与情绪一致率
 - 所有虚拟被试标记 is_virtual=True，与真实学生数据严格隔离
 
 ### 📈 情绪预测与异常检测
@@ -154,7 +155,7 @@ python run_backend.py
 | 智能体面板 | `/agents` | 多智能体协作、ReAct 推理、SSE 流式 |
 | 心理量表 | `/scales` | 八种标准化量表自评 + CAT 自适应 |
 | 经典实验 | `/experiment` | 经典心理学实验（Stroop）、数据加载、实验演示 |
-| 虚拟被试 | `/virtual-subject` | 虚拟被试合成数据、诊断流程演示、结果分析 |
+| 虚拟被试 | `/virtual-subject` | 虚拟被试合成数据、诊断流程演示、结果分析、诊断算法校准 |
 
 ---
 
@@ -169,6 +170,7 @@ Xinjing/
 │   │   ├── fusion.py           # 三模态证据融合（D-S）
 │   │   ├── cat.py              # 自适应测验（IRT + GRM）
 │   │   ├── virtual_subject.py  # 虚拟被试教学
+│   │   ├── diagnostic_calibration.py # 诊断算法校准（灵敏度/特异度/一致率）
 │   │   ├── emotion_forecast.py # 情绪预测与异常检测
 │   │   └── ...
 │   └── models/                 # 数据模型
@@ -189,7 +191,7 @@ Xinjing/
 │   ├── cat_equivalence_report.md  # 自适应测验等价性报告
 │   ├── emotion_forecast_report.md # 情绪预测与异常检测报告
 │   └── ...
-├── tests/                      # 测试（127 项）
+├── tests/                      # 测试（160 项）
 ├── data/                       # 数据（SQLite、常模）
 ├── run_backend.py              # 启动脚本
 ├── requirements.txt            # Python 依赖

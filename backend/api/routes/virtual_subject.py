@@ -7,15 +7,17 @@
   - POST /api/virtual-subjects/generate          生成一名虚拟被试（隐藏真值）
   - POST /api/virtual-subjects/auto-diagnose     系统自动诊断（量表计分+情绪判定+风险分级，与真值对照）
   - POST /api/virtual-subjects/grade             诊断对比批改（评估诊断算法准确性）
+  - GET  /api/virtual-subjects/calibration       诊断算法校准（批量评估灵敏度/特异度/一致率）
 """
 
 from __future__ import annotations
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.services.virtual_subject import (
     PROFILES, generate_virtual_subject, student_view, grade_diagnosis, auto_diagnose,
 )
+from backend.services.diagnostic_calibration import run_diagnostic_calibration
 
 router = APIRouter(prefix="/virtual-subjects", tags=["虚拟被试合成数据"])
 
@@ -84,4 +86,14 @@ async def grade(req: GradeRequest):
         "emotion_judgment": req.emotion_judgment,
         "suggestion": req.suggestion,
     })
+    return {"success": True, "data": result}
+
+
+@router.get("/calibration", summary="诊断算法校准（批量评估灵敏度/特异度/一致率）")
+async def calibration(
+    seed: int = Query(42, description="随机种子（可复现）"),
+    n_per_profile: int = Query(10, ge=1, le=50, description="每剖面样本数"),
+):
+    """批量生成虚拟被试并自动诊断，输出算法校准指标（全部为合成数据）。"""
+    result = run_diagnostic_calibration(seed=seed, n_per_profile=n_per_profile)
     return {"success": True, "data": result}

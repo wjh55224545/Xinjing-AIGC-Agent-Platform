@@ -1,13 +1,7 @@
 <template>
   <div class="agent-panel-page">
     <h1>🤖 多智能体协作面板</h1>
-    <p class="subtitle">实时查看基于国产算力平台的多Agent协作状态</p>
-
-    <!-- 平台信息 -->
-    <div class="platform-info" v-if="platformInfo">
-      <span class="badge gpu">🇨🇳 国产算力: {{ platformInfo.domestic_gpu }}</span>
-      <span class="badge current">当前平台: {{ platformInfo.current_platform }}</span>
-    </div>
+    <p class="subtitle">实时查看多Agent协作状态</p>
 
     <!-- 智能体卡片 -->
     <div class="agent-grid" v-if="agentsInfo">
@@ -64,7 +58,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 
-const platformInfo = ref(null)
 const agentsInfo = ref(null)
 const activeAgent = ref(null)
 const running = ref(false)
@@ -83,11 +76,7 @@ const allAgents = computed(() => {
 
 onMounted(async () => {
   try {
-    const [pRes, aRes] = await Promise.all([
-      fetch('/api/agents/platform'),
-      fetch('/api/agents/info'),
-    ])
-    platformInfo.value = (await pRes.json()).data
+    const aRes = await fetch('/api/agents/info')
     agentsInfo.value = (await aRes.json()).data
   } catch (e) {
     console.error('加载智能体信息失败:', e)
@@ -171,11 +160,6 @@ function truncate(text, maxLen) {
 <style scoped>
 .agent-panel-page { padding: 24px; max-width: 1400px; margin: 0 auto; }
 .subtitle { color: #666; margin-bottom: 16px; }
-
-.platform-info { display: flex; gap: 12px; margin-bottom: 24px; }
-.badge { padding: 6px 14px; border-radius: 16px; font-size: 13px; }
-.badge.gpu { background: #fff3e0; color: #e65100; font-weight: bold; }
-.badge.current { background: #e3f2fd; color: #1565c0; }
 
 .agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
 .agent-card { padding: 16px; border: 2px solid #e0e0e0; border-radius: 12px; background: #fff; transition: all 0.2s; }
