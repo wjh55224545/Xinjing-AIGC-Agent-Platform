@@ -14,15 +14,18 @@
 """
 
 from __future__ import annotations
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from backend.api.deps import get_db
 from backend.services.classic_experiments import (
     generate_stroop_trials, analyze_stroop, STROOP_COLORS,
     generate_flanker_trials, analyze_flanker, FLANKER_DIRECTIONS,
     generate_gonogo_trials, analyze_gonogo,
     generate_iat_trials, analyze_iat,
 )
+from backend.services.group_comparison import compare_group, record_experiment
 
 router = APIRouter(prefix="/experiments", tags=["经典心理学实验"])
 
@@ -68,11 +71,28 @@ class StroopAnalyzeRequest(BaseModel):
 
 
 @router.post("/stroop/analyze", summary="分析 Stroop 实验数据")
-async def analyze_stroop_data(req: StroopAnalyzeRequest):
+async def analyze_stroop_data(
+    req: StroopAnalyzeRequest,
+    student_id: int | None = Query(None, description="学生ID（可选，入库参与群体对照）"),
+    class_name: str = Query("", description="班级名（可选，入库参与群体对照）"),
+    db: Session = Depends(get_db),
+):
     if len(req.trials) < 4:
         return {"success": False, "error": "至少需要 4 个试次"}
     trials_dict = [t.model_dump() for t in req.trials]
     result = analyze_stroop(trials_dict, experiment_id=req.experiment_id)
+
+    # 群体对照入库（可选）
+    if student_id or class_name:
+        record_experiment(
+            db, student_id=student_id, class_name=class_name,
+            experiment_type="stroop", key_metric=result.stroop_effect,
+            accuracy=result.accuracy,
+            detail={"interpretation": result.interpretation,
+                    "congruent_rt_mean": result.congruent_rt_mean,
+                    "incongruent_rt_mean": result.incongruent_rt_mean},
+        )
+
     return {
         "success": True,
         "data": {
@@ -131,10 +151,26 @@ class FlankerAnalyzeRequest(BaseModel):
 
 
 @router.post("/flanker/analyze", summary="分析 Flanker 任务数据")
-async def analyze_flanker_data(req: FlankerAnalyzeRequest):
+async def analyze_flanker_data(
+    req: FlankerAnalyzeRequest,
+    student_id: int | None = Query(None, description="学生ID（可选，入库参与群体对照）"),
+    class_name: str = Query("", description="班级名（可选，入库参与群体对照）"),
+    db: Session = Depends(get_db),
+):
     if len(req.trials) < 4:
         return {"success": False, "error": "至少需要 4 个试次"}
     result = analyze_flanker([t.model_dump() for t in req.trials], experiment_id=req.experiment_id)
+
+    if student_id or class_name:
+        record_experiment(
+            db, student_id=student_id, class_name=class_name,
+            experiment_type="flanker", key_metric=result.flanker_effect,
+            accuracy=result.accuracy,
+            detail={"interpretation": result.interpretation,
+                    "congruent_rt_mean": result.congruent_rt_mean,
+                    "incongruent_rt_mean": result.incongruent_rt_mean},
+        )
+
     return {
         "success": True,
         "data": {
@@ -194,10 +230,27 @@ class GoNoGoAnalyzeRequest(BaseModel):
 
 
 @router.post("/gonogo/analyze", summary="分析 Go/No-Go 任务数据")
-async def analyze_gonogo_data(req: GoNoGoAnalyzeRequest):
+async def analyze_gonogo_data(
+    req: GoNoGoAnalyzeRequest,
+    student_id: int | None = Query(None, description="学生ID（可选，入库参与群体对照）"),
+    class_name: str = Query("", description="班级名（可选，入库参与群体对照）"),
+    db: Session = Depends(get_db),
+):
     if len(req.trials) < 4:
         return {"success": False, "error": "至少需要 4 个试次"}
     result = analyze_gonogo([t.model_dump() for t in req.trials], experiment_id=req.experiment_id)
+
+    if student_id or class_name:
+        record_experiment(
+            db, student_id=student_id, class_name=class_name,
+            experiment_type="gonogo", key_metric=result.false_alarm_rate,
+            accuracy=result.accuracy,
+            detail={"interpretation": result.interpretation,
+                    "go_rt_mean": result.go_rt_mean,
+                    "hit_rate": result.hit_rate,
+                    "inhibition_score": result.inhibition_score},
+        )
+
     return {
         "success": True,
         "data": {
@@ -255,10 +308,26 @@ class IatAnalyzeRequest(BaseModel):
 
 
 @router.post("/iat/analyze", summary="分析 IAT 实验数据")
-async def analyze_iat_data(req: IatAnalyzeRequest):
+async def analyze_iat_data(
+    req: IatAnalyzeRequest,
+    student_id: int | None = Query(None, description="学生ID（可选，入库参与群体对照）"),
+    class_name: str = Query("", description="班级名（可选，入库参与群体对照）"),
+    db: Session = Depends(get_db),
+):
     if len(req.trials) < 4:
         return {"success": False, "error": "至少需要 4 个试次"}
     result = analyze_iat([t.model_dump() for t in req.trials], experiment_id=req.experiment_id)
+
+    if student_id or class_name:
+        record_experiment(
+            db, student_id=student_id, class_name=class_name,
+            experiment_type="iat", key_metric=result.d_score,
+            accuracy=result.accuracy,
+            detail={"interpretation": result.interpretation,
+                    "compatible_rt_mean": result.compatible_rt_mean,
+                    "incompatible_rt_mean": result.incompatible_rt_mean},
+        )
+
     return {
         "success": True,
         "data": {
@@ -271,3 +340,23 @@ async def analyze_iat_data(req: IatAnalyzeRequest):
             "interpretation": result.interpretation,
         },
     }
+
+
+# ==================== 群体对照 ====================
+
+
+@router.get("/group-comparison", summary="班级 vs 全校群体对照")
+async def group_comparison_endpoint(
+    class_name: str = Query(..., description="班级名称"),
+    experiment_type: str = Query("stroop", pattern="^(stroop|flanker|gonogo|iat)$",
+                                 description="实验类型"),
+    db: Session = Depends(get_db),
+):
+    """
+    班级均值 vs 全校基准的群体画像对照（个体诊断 + 群体画像双价值）。
+
+    依据：Ebert et al. (2019, Depression and Anxiety) 入学筛查分层可行；
+    Han et al. (2022, Frontiers in Genetics) 多因素预警画像。
+    """
+    result = compare_group(db, class_name=class_name, experiment_type=experiment_type)
+    return {"success": True, "data": result}

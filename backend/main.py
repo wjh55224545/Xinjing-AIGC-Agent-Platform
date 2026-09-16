@@ -251,7 +251,7 @@ app = FastAPI(
         "- 📊 实时情绪监测与深度心理健康分析\n"
         "- 🔔 三级预警与多渠道反馈"
     ),
-    version="2.2.0",
+    version="2.8.0",
     lifespan=lifespan,
     docs_url=None,   # 禁用默认英文 Swagger，改用下方自定义中文页面
     redoc_url="/redoc",
@@ -317,6 +317,7 @@ from backend.api.routes.virtual_subject import router as virtual_subject_router
 from backend.api.routes.emotion_forecast import router as emotion_forecast_router
 from backend.api.routes.risk_assessment import router as risk_assessment_router
 from backend.api.routes.classic_experiments import router as classic_experiments_router
+from backend.api.routes.intervention import router as intervention_router
 
 app.include_router(upload_router, prefix="/api")
 app.include_router(sse_router, prefix="/api")
@@ -333,6 +334,7 @@ app.include_router(virtual_subject_router, prefix="/api")
 app.include_router(emotion_forecast_router, prefix="/api")
 app.include_router(risk_assessment_router, prefix="/api")
 app.include_router(classic_experiments_router, prefix="/api")
+app.include_router(intervention_router, prefix="/api")
 
 # 注册 GPU 状态 API
 from backend.gpu import register_gpu_routes
@@ -363,7 +365,7 @@ def health():
     return {
         "status": "ok",
         "service": "心镜·AIGC智能体平台",
-        "version": "2.6.0",
+        "version": "2.8.0",
         "platform": platform_info,
         "model": model_info,
     }

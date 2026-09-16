@@ -22,5 +22,8 @@ def get_db():
 
 
 def init_db():
-    from backend.models import Student, EmotionRecord, DailyReport, Alert  # noqa: F401
+    from backend.models import (  # noqa: F401
+        Student, EmotionRecord, DailyReport, Alert,
+        InterventionCycle, ExperimentRecord,
+    )
     Base.metadata.create_all(bind=engine)

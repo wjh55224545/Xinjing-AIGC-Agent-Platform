@@ -101,11 +101,60 @@
             </div>
           </div>
           <div class="interp">{{ resultText }}</div>
+
+          <!-- 群体对照：保存到班级 + 查看对照（方案三） -->
+          <div class="group-box">
+            <div class="input-row">
+              <input v-model="groupClass" placeholder="输入班级名（如：高一(1)班），保存本次结果参与群体对照" />
+              <button class="btn btn-primary" @click="saveToGroup" :disabled="savingGroup || !groupClass.trim()">
+                {{ savingGroup ? '保存中...' : '💾 保存到群体对照' }}
+              </button>
+            </div>
+            <p v-if="groupSaved" class="ok">✅ 已保存，可在下方「班级 vs 全校对照」查看群体画像</p>
+          </div>
+
           <div class="row-actions">
             <button class="btn btn-primary" @click="reset">重新开始</button>
             <button class="btn" @click="exportReport">导出结果文本</button>
           </div>
         </div>
+      </template>
+    </div>
+
+    <!-- 群体对照（方案三：班级 vs 全校，个体诊断+群体画像） -->
+    <div class="card">
+      <h3>📈 班级 vs 全校对照</h3>
+      <p class="text-muted">
+        把同一班级多次实验结果聚合为群体画像，与全校基准对照。依据：大学生心理风险筛查分层
+        （Ebert et al., 2019, Depression and Anxiety）。
+      </p>
+      <div class="input-row" style="margin-bottom:10px">
+        <input v-model="compareClass" placeholder="班级名（如：高一(1)班）" />
+        <select v-model="compareType">
+          <option value="stroop">Stroop</option>
+          <option value="flanker">Flanker</option>
+          <option value="gonogo">Go/No-Go</option>
+          <option value="iat">IAT</option>
+        </select>
+        <button class="btn btn-primary" @click="loadGroupComparison" :disabled="!compareClass.trim()">查看对照</button>
+      </div>
+      <template v-if="comparison">
+        <div class="grid">
+          <div class="metric">
+            <div class="metric-name">班级均值（n={{ comparison.class_stats.n }}）</div>
+            <div class="metric-value">{{ comparison.class_stats.mean ?? '—' }}</div>
+          </div>
+          <div class="metric">
+            <div class="metric-name">全校均值（n={{ comparison.school_stats.n }}）</div>
+            <div class="metric-value">{{ comparison.school_stats.mean ?? '—' }}</div>
+          </div>
+          <div class="metric">
+            <div class="metric-name">差值</div>
+            <div class="metric-value">{{ comparison.delta ?? '—' }}</div>
+          </div>
+        </div>
+        <div class="interp">{{ comparison.interpretation }}</div>
+        <p v-if="comparison.sample_warning" class="warn">⚠️ {{ comparison.sample_warning }}</p>
       </template>
     </div>
   </div>
@@ -154,6 +203,14 @@ const resultText = ref("");
 const resultMetrics = ref({});
 const trialsMeta = ref({});
 let startTime = 0;
+
+// 群体对照（方案三）
+const groupClass = ref("");
+const savingGroup = ref(false);
+const groupSaved = ref(false);
+const compareClass = ref("");
+const compareType = ref("stroop");
+const comparison = ref(null);
 
 function arrowText(d) { return d === "left" ? "←" : "→"; }
 function colorHex(key) {
@@ -284,6 +341,50 @@ function reset() {
   finished.value = false;
   resultText.value = "";
   resultMetrics.value = {};
+  groupSaved.value = false;
+}
+
+// ---- 方案三：保存到群体对照 / 查看班级对照 ----
+async function saveToGroup() {
+  savingGroup.value = true;
+  groupSaved.value = false;
+  try {
+    // 复用最近一次分析结果（answers 仍保留），带班级名重新提交入库
+    let resp;
+    const params = { class_name: groupClass.value.trim() };
+    if (expType.value === "stroop") {
+      resp = await axios.post(`/api/experiments/stroop/analyze?class_name=${encodeURIComponent(groupClass.value.trim())}`, { trials: answers.value });
+    } else if (expType.value === "flanker") {
+      resp = await axios.post(`/api/experiments/flanker/analyze?class_name=${encodeURIComponent(groupClass.value.trim())}`, { trials: answers.value });
+    } else if (expType.value === "gonogo") {
+      resp = await axios.post(`/api/experiments/gonogo/analyze?class_name=${encodeURIComponent(groupClass.value.trim())}`, { trials: answers.value });
+    } else {
+      resp = await axios.post(`/api/experiments/iat/analyze?class_name=${encodeURIComponent(groupClass.value.trim())}`, { trials: answers.value });
+    }
+    if (resp.data.success) {
+      groupSaved.value = true;
+      compareClass.value = groupClass.value.trim();
+      compareType.value = expType.value;
+      await loadGroupComparison();
+    } else {
+      alert(resp.data.error || "保存失败");
+    }
+  } catch (e) {
+    alert(e.response?.data?.detail || "保存失败");
+  } finally {
+    savingGroup.value = false;
+  }
+}
+
+async function loadGroupComparison() {
+  try {
+    const resp = await axios.get(
+      `/api/experiments/group-comparison?class_name=${encodeURIComponent(compareClass.value.trim())}&experiment_type=${compareType.value}`
+    );
+    comparison.value = resp.data.data;
+  } catch (e) {
+    alert(e.response?.data?.detail || "对照查询失败");
+  }
 }
 
 function exportReport() {
@@ -326,4 +427,10 @@ function exportReport() {
 .metric-value { font-size: 20px; font-weight: 700; color: #1f2937; margin-top: 6px; }
 .interp { background: #f5f3ff; border-left: 4px solid #4f46e5; padding: 14px; border-radius: 6px; font-size: 14px; line-height: 1.8; color: #374151; }
 .row-actions { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.group-box { margin-top: 14px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+.input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.input-row input { flex: 1; min-width: 220px; padding: 9px 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 13px; }
+.input-row select { padding: 9px 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 13px; }
+.ok { color: #16a34a; font-size: 13px; margin-top: 8px; }
+.warn { color: #d97706; font-size: 13px; margin-top: 8px; }
 </style>

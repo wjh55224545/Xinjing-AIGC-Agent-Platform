@@ -134,6 +134,7 @@ def _auto_fetch_emotion_data(student_id: int, date: str = "") -> dict:
             "stress_accumulation_index": round(neg / len(records) * 1.2, 3),
             "emotion_recovery_speed": round(pos / max(neg + pos, 1), 3),
             "overall_mental_health_score": round(avg_score, 3),
+            "emotion_distribution": {e: emotions.count(e) for e in set(emotions)},
         }
 
         # 风险因素
@@ -143,7 +144,15 @@ def _auto_fetch_emotion_data(student_id: int, date: str = "") -> dict:
         if variance > 0.05: risk_factors.append("情绪波动偏大")
         if trend == "下降中": risk_factors.append("情绪呈下降趋势")
 
-        risk_level = "red" if avg_score < 0.4 else ("yellow" if avg_score < 0.7 else "green")
+        # 风险等级综合判定（修复：评分低但负面占比也低时不得判红色高风险，
+        # 避免"积极情绪占比52.3%却判高风险"类数据-结论矛盾——专家评估 R05 评语）
+        neg_ratio = neg / len(records)
+        if avg_score < 0.4 and (neg_ratio > 0.4 or variance > 0.08):
+            risk_level = "red"
+        elif avg_score < 0.7 or neg_ratio > 0.4:
+            risk_level = "yellow"
+        else:
+            risk_level = "green"
 
         # 查找最新量表数据用于交叉验证
         from backend.models.scale_result import ScaleResult
@@ -297,6 +306,101 @@ async def generate_growth_narrative(req: GrowthNarrativeRequest):
         return {"success": True, "data": result}
     except Exception as e:
         logger.error(f"生成成长叙事失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---- 报告多轮追问（治疗性评估协作反馈，Finn & Tonsager 1997） ----
+
+
+class FollowUpRequest(BaseModel):
+    report_text: str = Field(..., description="报告原文")
+    question: str = Field(..., description="读者追问内容")
+    analysis_result: dict = Field(default_factory=dict, description="该生分析结果（指标证据链）")
+    history: list = Field(default_factory=list, description="追问历史 [{role, content}]")
+
+
+@router.post("/report/followup", summary="AIGC 报告多轮追问")
+async def report_followup(req: FollowUpRequest):
+    """基于指标证据链回答读者对报告结论的追问。"""
+    try:
+        from backend.services.report_followup import answer_followup
+        result = answer_followup(
+            report_text=req.report_text,
+            question=req.question,
+            analysis=req.analysis_result,
+            history=req.history,
+        )
+        return {"success": True, "data": result}
+    except Exception as e:
+        logger.error(f"报告追问失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/report/{student_id}/{date}/pdf", summary="导出诊断报告 PDF")
+async def export_report_pdf(student_id: int, date: str):
+    """
+    导出结构化 PDF 诊断报告（风险结论置顶 + 指标表 + 建议 + 技术附注）。
+
+    设计依据：Valenstein 2008（诊断标题置顶/信息密度）、Brick et al. 2022
+    （表格化理解更优 d=0.39）、Woloshin et al. 2023（按读者任务组织展示）。
+    """
+    try:
+        import io
+        from fastapi.responses import StreamingResponse
+        from backend.services.report_pdf import build_report_pdf
+        from backend.aigc.report_generator import ReportGenerator
+
+        auto = _auto_fetch_emotion_data(student_id, date)
+        if "error" in auto:
+            raise HTTPException(status_code=404, detail=auto["error"])
+
+        analysis = auto["analysis_result"]
+        emotion_data = auto["emotion_data"]
+        student_name = auto.get("student_name", f"学生{student_id}")
+
+        # 生成完整日报（复用已修复的报告生成器）
+        gen = ReportGenerator()
+        report = gen.generate(
+            student_name=student_name, date=date,
+            emotion_data=emotion_data, analysis_result=analysis,
+        )
+        report_text = report.get("report_text", "")
+        indicators = analysis.get("indicators", {})
+
+        # 建议列表：优先分析结果内置，否则用个性化建议生成
+        suggestions = analysis.get("suggestions") or gen._generate_personalized_suggestions(analysis)
+
+        # 从报告文本中拆出概况/发现/风险分析段落（供 PDF 渲染）
+        emotion_overview, key_findings, risk_analysis = "", "", ""
+        for section in report_text.split("### "):
+            if section.startswith("一、情绪概况"):
+                emotion_overview = section.split("\n", 1)[1].strip() if "\n" in section else section
+            elif section.startswith("三、关键发现"):
+                key_findings = section.split("\n", 1)[1].strip() if "\n" in section else section
+            elif section.startswith("四、风险分析"):
+                risk_analysis = section.split("\n", 1)[1].strip() if "\n" in section else section
+
+        pdf_bytes = build_report_pdf(
+            student_name=student_name,
+            date=date,
+            overall_score=float(analysis.get("overall_score", 0.7)),
+            risk_level=analysis.get("risk_level", "green"),
+            indicators=indicators,
+            emotion_overview=emotion_overview or "（详情见报告正文）",
+            key_findings=key_findings or "（见报告正文）",
+            risk_analysis=risk_analysis or "（见报告正文）",
+            suggestions=suggestions,
+        )
+        filename = f"mindmirror_report_{student_id}_{date}.pdf"
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"导出 PDF 失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

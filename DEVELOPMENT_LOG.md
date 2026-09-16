@@ -1,7 +1,134 @@
 # 心镜 · 开发日志
 
 > 记录每次升级的背景、改动内容、验证结果，供协作者同步进度。
-> 版本基线：v2.6.0
+> 版本基线：v2.8.0
+
+---
+
+## 2026-09-16 — 升级批次：评估闭环 · 群体对照 · 报告追问 · PDF 导出（v2.8.0 增量）
+
+### 一、升级背景
+
+依据专家评分表定位的弱项（F1 专业性 7.82 / F2 相关性 7.65 / F7 信任度 7.58）与评语硬伤
+（数据-结论矛盾、个性化不足、共情欠缺），在前序「报告质量修复」基础上，本轮补齐诊断链路
+两端：**预警之后有闭环、个体结果能汇入群体、报告能追问、结论可导出**，让系统从"出报告"
+升级为"可验证的筛查-干预-评估闭环"。
+
+### 二、升级内容详解（4 项）
+
+#### 1. 预警-干预闭环统计（方案二）
+- 新增 `InterventionCycle` 模型（backend/models/intervention_cycle.py）：
+  预警 → 干预建议 → 定时复测（默认 14 天）→ 结局判定（improved/stable/worsened）
+- 新增服务 `backend/services/intervention_cycle.py`：
+  `create_cycle` / `complete_cycle` / `check_overdue` / `get_cycle_statistics`
+  （统计：闭环总数、完成数、逾期数、好转率、干预前后均值、风险迁移矩阵）
+- 新增 API（backend/api/routes/intervention.py，前缀 /api）：
+  `POST /intervention/cycles`、`POST /intervention/cycles/{id}/complete`、
+  `GET /intervention/cycles/statistics`、`GET /intervention/cycles`、
+  `POST /intervention/cycles/check-overdue`
+- 前端：预警面板顶部新增「干预闭环统计」卡片（好转率/均值/风险迁移），
+  预警行新增「创建闭环」按钮、「检查逾期」按钮
+- 文献支撑：JITAI 即时自适应干预（Nahumshani et al., 2018, Ann Behav Med）；
+  智能手机干预闭环有效性（Bidargaddi et al., 2020, Transl Psychiatry）；
+  抑郁数字干预个体化（Marciniak et al., 2020, JMIR）
+
+#### 2. 经典实验群体对照（方案三）
+- 新增 `ExperimentRecord` 模型：四范式（Stroop/Flanker/Go-No-Go/IAT）统一存储
+  key_metric / accuracy / detail；`student_id` 可空，支持仅按班级聚合
+- 新增服务 `backend/services/group_comparison.py`：
+  `record_experiment`（入库）/ `compare_group`（班级均值 vs 全校基准、差值、画像解释、样本量提示）
+- 新增 API：`GET /experiments/group-comparison?class_name=&experiment_type=`；
+  四个 analyze 端点新增可选 query 参数 `student_id` / `class_name`（给值即入库）
+- 前端：实验完成页新增「保存到群体对照」（输入班级名入库）、
+  「班级 vs 全校对照」面板（班级均值/全校均值/差值/画像解释/样本量警告）
+- 文献支撑：大学生心理风险入学筛查分层（Ebert et al., 2019, Depression and Anxiety,
+  n=2519, AUC=0.73）；多因素预警画像（Han et al., 2022, Frontiers in Genetics, AUC=0.947）
+
+#### 3. AIGC 报告多轮追问（方案四）
+- 新增服务 `backend/services/report_followup.py`：
+  `_extract_evidence` 从 analysis.indicators 提取 10 类指标证据链；
+  `answer_followup` 优先 LLM（注入报告节选 + 证据链 + 追问历史 + 风险等级），
+  LLM 不可用时按「风险 / 占比 / 稳定 / 恢复压力 / 兜底证据链」关键词模板回答
+- 新增 API：`POST /aigc/report/followup`（Body: report_text / question / analysis_result / history）
+- 前端：报告页（日报）新增「对报告追问」输入框，多轮对话式问答，每轮显示依据指标
+- 文献支撑：治疗性评估协作反馈（Finn & Tonsager, 1997）；
+  评估反馈改善心理健康结果的元分析（Poston & Hanson, 2010, d=0.423）；
+  反馈干预理论（Kluger & DeNisi, 1996）
+
+#### 4. 诊断报告 PDF 导出（方案五）
+- 新增服务 `backend/services/report_pdf.py`（reportlab 生成 A4 PDF）：
+  中文字体自动注册（simsun.ttc / msyh.ttc / simhei.ttf / Deng.ttf，兜底 Helvetica）；
+  结构：标题 → **风险结论色块置顶** → 情绪概况 → 8 行指标表 → 关键发现 →
+  风险分析 → 建议 → 技术附注（数据来源 / 指标口径 / 免责声明）
+- 新增 API：`GET /aigc/report/{student_id}/{date}/pdf`
+  （内部复用自动拉数 + ReportGenerator，StreamingResponse 下载，文件名
+  `mindmirror_report_{student_id}_{date}.pdf`）
+- 前端：日报结果区新增「导出 PDF 诊断报告」按钮（Blob 下载）
+- 文献支撑：报告格式化四原则（Valenstein, 2008, Arch Pathol Lab Med）；
+  表格化呈现理解更优（Brick et al., 2022, Med Decis Making, d=0.39）；
+  按读者任务组织数据展示（Woloshin et al., 2023, Nature Medicine）
+
+### 三、验证结果
+
+- 新增 4 个测试文件 20 项测试：test_intervention_cycle（7）/ test_group_comparison（4）/
+  test_report_followup（6）/ test_report_pdf（3）
+- 修复两处工程问题：`backend/models/__init__.py` 补注册 `ScaleResult`
+  （Student 关系引用却未导出，SQLAlchemy 映射解析失败）；
+  PDF 中文字体以 TrueType 子集（/F2+、FontFile2）嵌入而非 Type0，测试断言同步修正
+- 前端构建通过（vite build 无错误）；后端 191 项全量测试 **通过，无回归**（基线 160 + 方案一 11 + 方案二至五 20）
+
+---
+
+## 2026-09-16 — 升级批次：AIGC 报告质量修复（v2.7.0 增量）
+
+### 一、升级背景
+
+依据湖北大学心理学系熊猛教授团队对 12 份 AI 报告的 8 维度盲评（总体 8.00/10，480 个评分样本），
+定位到报告模块 5 类硬伤并逐条修复：
+
+| 专家发现的问题 | 定位根因 | 本次修复 |
+|---|---|---|
+| 信任度最低（7.58/10）；"积极占比20%却称接近满分"（R03）、"积极占比52.3%却判高风险"（R05） | 报告结论与数据无一致性约束；风险等级只按平均分判定 | 新增数据-结论一致性校验 + 风险等级综合判定 |
+| 指标表缺项（风险等级/情绪恢复速度/压力累积，6 处提及） | 指标数据层已算好但模板未渲染 | 日报模板指标表从 5 行补全为 8 行 |
+| 共情性偏低（7.77）；"情绪稳定性较高"与"波动偏大"并存（R01） | 概览只看综合分；关键发现与概览各自独立生成 | 概览加入一致性修正；关键发现消除矛盾并存表述 |
+| 个性化不足（3 次提及）；R04 因个性化获 8.57 最高分 | 建议列表为空时落到通用文案 | 按主导情绪生成个性化建议库 |
+| 英文残留（明日预测处） | 建议优先级标签输出英文；LLM prompt 无全中文约束 | 优先级映射中文；LLM prompt 增加"全中文+一致性铁律+共情要求" |
+
+文献支撑：Tun et al. 2025 (JMIR)——临床可靠性是 AI 决策信任第一要素；
+Di Blasi et al. 2001 (Lancet)——温暖安抚式沟通更有效；
+Kroeze et al. 2006 (Ann Behav Med)——定制化干预 23/30 项 RCT 优于通用信息；
+Schoevers et al. 2020 (Psychological Medicine)——情绪动态指标是疾病状态核心信号。
+
+### 二、升级内容详解
+
+#### 1. 数据-结论一致性校验（report_generator.py 新增 `_check_consistency`）
+- 校验 7 类矛盾：积极占比≥50% vs 红色风险、积极占比<30% vs 绿色风险、综合评分≥0.7 vs 积极占比<30%、
+  负面占比>40% vs 绿色风险、评分≥0.7 vs 负面占比>40%、评分≥0.7 vs 稳定性<0.3、趋势下降 vs 绿色风险
+- 概览段落（`_generate_emotion_overview`）收到矛盾清单后自动降档措辞，
+  不再输出"整体良好"类与数据冲突的结论
+
+#### 2. 风险等级综合判定（api/routes/aigc.py）
+- 旧逻辑：`avg_score < 0.4 → red`（导致积极占比 52.3% 却判高风险）
+- 新逻辑：`avg_score < 0.4 且（负面占比>40% 或方差>0.08）→ red`；`avg_score < 0.7 或负面占比>40% → yellow`；否则 green
+
+#### 3. 指标表补全（report_templates.py）
+- 指标表从 5 行补全为 8 行：综合评分、**风险等级（新增）**、情绪稳定性、积极占比、
+  负面占比、情绪趋势、**情绪恢复速度（新增）**、**压力累积指数（新增）**，每行带状态标签
+
+#### 4. 共情措辞与矛盾消除
+- 风险分析改为温暖建设性措辞（黄色"多数情况下通过自我调节即可改善"、红色"请保持耐心，避免责备"）
+- 关键发现消除"稳定"与"波动大"并存矛盾；新增压力累积偏高提示
+- 明日预测统一全中文表述
+
+#### 5. 个性化建议（新增 `_generate_personalized_suggestions`）
+- 按主导情绪（开心/平静/中性/悲伤/焦虑/愤怒/恐惧/厌恶）匹配定制建议库
+- 结合恢复速度慢、压力累积高追加针对性建议；优先级标签中文化
+- LLM prompt 增加一致性铁律、全中文、共情要求、指标表 8 行要求
+
+### 三、验证结果
+
+- 新增 `tests/test_report_consistency.py` 11 项测试（一致性校验 3 / 指标表 2 / 模板一致性 3 / 个性化 2 / 全中文 1）
+- 全量测试 **160 → 171 passed**，无回归
 
 ---
 

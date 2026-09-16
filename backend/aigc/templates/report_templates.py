@@ -23,10 +23,13 @@ DAILY_REPORT_TEMPLATE = """## 📊 {student_name} 心理健康评估日报
 | 指标 | 数值 | 状态 |
 |------|------|------|
 | 综合评分 | {overall_score:.2f}/1.00 | {score_status} |
+| 风险等级 | {risk_level_cn} | {risk_level_status} |
 | 情绪稳定性 | {stability:.2f} | {stability_status} |
 | 积极情绪占比 | {positive_ratio:.0%} | {positive_status} |
 | 负面情绪占比 | {negative_ratio:.0%} | {negative_status} |
-| 情绪趋势 | {trend} | — |
+| 情绪趋势 | {trend} | {trend_status} |
+| 情绪恢复速度 | {recovery_speed:.2f} | {recovery_status} |
+| 压力累积指数 | {stress_accumulation:.2f} | {stress_status} |
 
 ### 三、关键发现
 
