@@ -36,36 +36,50 @@ from reportlab.platypus import (
 
 logger = logging.getLogger(__name__)
 
-# ---------- 中文字体注册（Windows） ----------
+# ---------- 中文字体注册（Windows 优先，Linux/CI 兜底） ----------
 _FONT_REGISTERED = False
 _FONT_NAME = "CJK"
 
 
 def _register_font() -> str:
-    """注册系统中文字体；找不到时返回内置 Helvetica（中文会缺字，尽力而为）。"""
+    """注册系统中文字体；找不到时回退 Helvetica（中文会缺字，尽力而为）。
+
+    注意：回退时必须同步更新 _FONT_NAME，否则后续调用会因缓存标记
+    直接返回从未注册的 "CJK" 字体名，reportlab 会报
+    "Can't map determine family/bold/italic for cjk"。
+    """
     global _FONT_REGISTERED, _FONT_NAME
     if _FONT_REGISTERED:
         return _FONT_NAME
     candidates = [
+        # Windows
         ("C:/Windows/Fonts/simsun.ttc", 0, "SimSun"),
         ("C:/Windows/Fonts/msyh.ttc", 0, "MicrosoftYaHei"),
         ("C:/Windows/Fonts/simhei.ttf", None, "SimHei"),
         ("C:/Windows/Fonts/Deng.ttf", None, "DengXian"),
+        # Linux / CI（GitHub Actions ubuntu-latest 安装 fonts-noto-cjk）
+        ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0, "NotoSansCJK"),
+        ("/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf", None, "NotoSansCJKsc"),
+        ("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", 0, "NotoSansCJK"),
+        # Linux 通用兜底（无中文，但可正常生成）
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", None, "DejaVuSans"),
     ]
     for path, sub_idx, label in candidates:
         if os.path.exists(path):
             try:
-                pdfmetrics.registerFont(
-                    TTFont(_FONT_NAME, path, subfontIndex=sub_idx) if sub_idx is not None
-                    else TTFont(_FONT_NAME, path)
-                )
+                if sub_idx is not None:
+                    pdfmetrics.registerFont(TTFont(_FONT_NAME, path, subfontIndex=sub_idx))
+                else:
+                    pdfmetrics.registerFont(TTFont(_FONT_NAME, path))
                 _FONT_REGISTERED = True
                 logger.info(f"PDF 使用中文字体: {label} ({path})")
                 return _FONT_NAME
             except Exception as e:
                 logger.warning(f"字体注册失败 {path}: {e}")
+    _FONT_NAME = "Helvetica"
     _FONT_REGISTERED = True
-    return "Helvetica"
+    logger.warning("PDF 未找到可用中文字体，回退 Helvetica")
+    return _FONT_NAME
 
 
 def _style() -> dict:
