@@ -1,5 +1,35 @@
 # 更新日志
 
+## v2.9.0（统计检验 / 情境测验 / 个体画像）— 2026-09-27
+
+围绕「创新性」与「应用效果」得分点，补齐诊断证据链三环节：
+
+### 诊断一致性统计检验（升级 26）
+- `scale_stats.py` 新增 `roc_auc`（Mann-Whitney U 秩和法，含并列平均秩）与 `roc_points`
+- `diagnostic_calibration.py` 新增 `statistics` 块（roc_auc / roc_curve / pearson_r_scale_theta / cohen_kappa / is_synthetic / literature_benchmarks）+ interpretation 扩展
+- 前端虚拟被试页：统计卡片（ROC AUC / Pearson r / Kappa + 文献基准）+ ECharts ROC 曲线
+- 文献：Swets (1988)；Ebert et al. (2019) AUC≈0.73；Han et al. (2022) AUC≈0.947；Zhang et al. (2013) PHQ-9 中国大学生 AUC=0.977
+
+### 情境判断测验 SJT（升级 27）
+- `data/scales/SJT.json`：10 情境 × 6 维度（考试焦虑/学业压力/同伴冲突/社交回避/情绪调节/求助意愿），每题 4 选项带 score 与 note
+- `services/sjt.py`：公开题目（不泄露分值）/ score_sjt（维度分+总分+风险信号+建议）/ 虚拟被试按 θ 合成作答
+- 新增 API：`GET /api/sjt/questions`、`POST /api/sjt/submit`、`POST /api/sjt/assess`
+- 前端：SJT 页（手动/虚拟双模式）+ 雷达图结果组件
+- 文献：Weekley & Jones (1999)；McDaniel et al. (2003)；Webster et al. (2020) pooled r=0.32；Harenbrock et al. (2023) r=0.698
+
+### 个体多维心理画像（升级 28）
+- `services/psychological_profile.py`：build_student_profile（真实学生聚合，缺维度不填充）/ build_virtual_profile（全套画像）
+- 新增 API：`GET /api/psychological-profile/{student_id}`、`POST /api/psychological-profile/virtual`
+- 前端：画像页（SCL-90 雷达 + E1-E12 三组雷达 + Z 分条形 + 量表分 + SJT 画像 + 风险/建议/一致性）
+- 文献：HealthPrism（Jiang et al., 2023）；临床仪表盘（Wake et al., 2022）；星图可视化（Holzinger et al., 2013）
+
+### 验证
+- 新增 `tests/test_upgrades26_28.py` 14 项测试，全量测试 **191 → 205 passed**，前端构建通过
+- 冒烟：SJT questions=10、Profile OK、Calib AUC=1.0
+- 版本号统一为 v2.9.0
+
+---
+
 ## v2.8.0（评估闭环 / 群体对照 / 报告追问 / PDF 导出）— 2026-09-16
 
 补齐诊断链路两端，让系统从"出报告"升级为可验证的筛查-干预-评估闭环：

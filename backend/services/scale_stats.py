@@ -83,6 +83,64 @@ def binary_metrics(actual: list[bool], predicted: list[bool]) -> dict:
     }
 
 
+def roc_auc(scores: list[float], labels: list[bool]) -> float:
+    """
+    ROC 曲线下面积（AUC），用 Mann-Whitney U 统计量等价公式计算。
+
+    scores: 连续判定分数（越大越倾向阳性）
+    labels: 二值金标准（True=阳性）
+    返回 0~1 的 AUC；样本不足时返回 0.0。
+    对应文献口径：AUC≥0.90 极佳（Swets, 1988）；0.80~0.90 良好。
+    """
+    n_pos = sum(1 for l in labels if l)
+    n_neg = len(labels) - n_pos
+    if n_pos == 0 or n_neg == 0 or len(scores) != len(labels):
+        return 0.0
+    # 秩和（Mann-Whitney U）：AUC = U / (n_pos * n_neg)
+    pairs = sorted(zip(scores, labels), key=lambda p: p[0])
+    # 给并列分数分配平均秩
+    ranks = [0.0] * len(pairs)
+    i = 0
+    while i < len(pairs):
+        j = i
+        while j + 1 < len(pairs) and pairs[j + 1][0] == pairs[i][0]:
+            j += 1
+        avg_rank = (i + 1 + j + 1) / 2.0
+        for k in range(i, j + 1):
+            ranks[k] = avg_rank
+        i = j + 1
+    rank_sum_pos = sum(r for r, (_, lab) in zip(ranks, pairs) if lab)
+    u = rank_sum_pos - n_pos * (n_pos + 1) / 2.0
+    auc = u / (n_pos * n_neg) if (n_pos * n_neg) else 0.0
+    return round(min(max(auc, 0.0), 1.0), 4)
+
+
+def roc_points(scores: list[float], labels: list[bool], n_points: int = 21) -> list[dict]:
+    """生成 ROC 曲线离散点（fpr, tpr），供前端绘图；样本不足返回空。"""
+    n_pos = sum(1 for l in labels if l)
+    n_neg = len(labels) - n_pos
+    if n_pos == 0 or n_neg == 0 or len(scores) != len(labels):
+        return []
+    thresholds = sorted(set(scores))
+    if not thresholds:
+        return []
+    lo, hi = thresholds[0] - 1e-6, thresholds[-1] + 1e-6
+    pts = []
+    for i in range(n_points):
+        t = lo + (hi - lo) * i / max(n_points - 1, 1)
+        tp = sum(1 for s, l in zip(scores, labels) if s >= t and l)
+        fp = sum(1 for s, l in zip(scores, labels) if s >= t and not l)
+        fn = n_pos - tp
+        tn = n_neg - fp
+        pts.append({
+            "fpr": round(fp / n_neg, 4) if n_neg else 0.0,
+            "tpr": round(tp / n_pos, 4) if n_pos else 0.0,
+            "threshold": round(t, 4),
+            "fn": fn, "tn": tn,
+        })
+    return pts
+
+
 # ==================== 信效度检验（升级新增） ====================
 
 def cronbach_alpha(scores_by_subject: list[list[float]]) -> float:

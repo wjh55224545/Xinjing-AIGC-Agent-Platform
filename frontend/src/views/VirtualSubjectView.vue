@@ -200,6 +200,30 @@
             <div class="calib-label">边界案例（≥2级差）</div>
           </div>
         </div>
+
+        <!-- 统计检验（升级 26：ROC AUC / Pearson r / Kappa） -->
+        <div class="stat-grid" v-if="calibResult.statistics">
+          <div class="stat-card">
+            <div class="stat-num">{{ calibResult.statistics.roc_auc }}</div>
+            <div class="stat-label">ROC AUC（风险分 vs 真值阳性）</div>
+            <div class="stat-bench">文献参考：Ebert 2019=0.73 · Han 2022=0.947 · PHQ-9 中国大学生=0.977</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num">{{ calibResult.statistics.pearson_r_scale_theta }}</div>
+            <div class="stat-label">Pearson r（量表标准分 vs θ）</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num">{{ calibResult.statistics.cohen_kappa }}</div>
+            <div class="stat-label">Cohen's Kappa（判定 vs 真值）</div>
+          </div>
+        </div>
+
+        <!-- ROC 曲线 -->
+        <div v-if="calibResult.statistics && calibResult.statistics.roc_curve && calibResult.statistics.roc_curve.length" class="roc-box">
+          <h5>ROC 曲线（合成数据）</h5>
+          <v-chart :option="rocOption" autoresize style="height:280px"></v-chart>
+        </div>
+
         <p class="calib-interp">{{ calibResult.interpretation }}</p>
 
         <h5 style="margin:14px 0 8px">各剖面明细（按量表一致率升序）</h5>
@@ -224,8 +248,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import axios from "axios";
+import { use } from "echarts/core";
+import { LineChart } from "echarts/charts";
+import { GridComponent, TooltipComponent, LegendComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
+import VChart from "vue-echarts";
+use([LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
 
 const profiles = ref([]);
 const currentCase = ref(null);
@@ -303,6 +333,37 @@ function severityOf(theta) {
 function severityText(s) {
   return { healthy: "健康", mild: "轻度", moderate: "中度", severe: "重度" }[s] || s;
 }
+
+const rocOption = computed(() => {
+  const pts = calibResult.value?.statistics?.roc_curve || [];
+  const fprs = pts.map(p => p.fpr);
+  const tprs = pts.map(p => p.tpr);
+  return {
+    tooltip: { trigger: "axis", formatter: p => `FPR=${p[0].value[0]}<br/>TPR=${p[0].value[1]}` },
+    legend: { bottom: 0, textStyle: { fontSize: 11 } },
+    grid: { left: 50, right: 20, top: 20, bottom: 40 },
+    xAxis: { type: "value", name: "假阳性率 FPR", min: 0, max: 1, nameLocation: "middle", nameGap: 28, splitLine: { lineStyle: { type: "dashed" } } },
+    yAxis: { type: "value", name: "真阳性率 TPR", min: 0, max: 1, splitLine: { lineStyle: { type: "dashed" } } },
+    series: [
+      {
+        name: "ROC 曲线",
+        type: "line",
+        data: fprs.map((f, i) => [f, tprs[i]]),
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { color: "#6366f1", width: 2 },
+        areaStyle: { color: "rgba(99,102,241,0.08)" },
+      },
+      {
+        name: "随机基准（AUC=0.5）",
+        type: "line",
+        data: [[0, 0], [1, 1]],
+        lineStyle: { color: "#c4b5fd", type: "dashed", width: 1 },
+        showSymbol: false,
+      },
+    ],
+  };
+});
 </script>
 
 <style scoped>
@@ -396,4 +457,12 @@ function severityText(s) {
 .calib-num { font-size: 24px; font-weight: 700; color: #6366f1; }
 .calib-label { font-size: 12px; color: var(--text-muted, #6b7280); margin-top: 4px; }
 .calib-interp { font-size: 13px; line-height: 1.7; color: var(--text, #4b5563); background: rgba(99,102,241,0.06); border-left: 3px solid #6366f1; border-radius: 6px; padding: 10px 14px; margin: 14px 0 0; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 14px; }
+.stat-card { background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.06)); border: 1px solid rgba(99,102,241,0.2); border-radius: 12px; padding: 14px; }
+.stat-num { font-size: 26px; font-weight: 800; color: #6366f1; }
+.stat-label { font-size: 12px; color: var(--text-muted, #6b7280); margin-top: 4px; }
+.stat-bench { font-size: 11px; color: var(--text-muted, #9e9e9e); margin-top: 6px; line-height: 1.5; }
+.roc-box { margin-top: 14px; }
+.roc-box h5 { margin: 0 0 8px; font-size: 14px; }
 </style>

@@ -23,4 +23,20 @@ export function triggerOuter() { return api.post("/agents/trigger/outer").then(r
 export function uploadVideo(formData) {
   return api.post("/upload/video", formData, { headers: { "Content-Type": "multipart/form-data" } }).then(r => r.data);
 }
+export function fetchSjtQuestions() { return api.get("/sjt/questions").then(r => r.data); }
+export function submitSjt(answers, studentId = null) {
+  return api.post("/sjt/submit", { answers, student_id: studentId }).then(r => r.data);
+}
+export function assessSjtVirtual(profileId, seed = null) {
+  return api.post("/sjt/assess", { profile_id: profileId, seed }).then(r => r.data);
+}
+export function fetchStudentProfile(studentId) {
+  return api.get(`/psychological-profile/${studentId}`).then(r => r.data);
+}
+export function fetchVirtualProfile(profileId, seed = null) {
+  return api.post("/psychological-profile/virtual", { profile_id: profileId, seed }).then(r => r.data);
+}
+export function fetchCalibration(seed = 42, nPerProfile = 10) {
+  return api.get("/virtual-subjects/calibration", { params: { seed, n_per_profile: nPerProfile } }).then(r => r.data);
+}
 export default api;

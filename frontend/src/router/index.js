@@ -12,6 +12,8 @@ const routes = [
   { path: "/experiment", name: "ClassicExperiments", component: () => import("../views/ClassicExperimentsView.vue") },
   { path: "/experiment-vibra", name: "VibraLab", component: () => import("../views/ExperimentView.vue") },
   { path: "/virtual-subject", name: "VirtualSubject", component: () => import("../views/VirtualSubjectView.vue") },
+  { path: "/sjt", name: "Sjt", component: () => import("../views/SjtView.vue") },
+  { path: "/profile", name: "PsychologicalProfile", component: () => import("../views/PsychologicalProfileView.vue") },
 ];
 
 export default createRouter({ history: createWebHistory(), routes });

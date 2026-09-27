@@ -12,6 +12,8 @@
         <router-link to="/scales">📋 心理量表</router-link>
         <router-link to="/experiment">🧪 经典实验</router-link>
         <router-link to="/virtual-subject">🎓 虚拟被试</router-link>
+        <router-link to="/sjt">🧩 情境判断测验</router-link>
+        <router-link to="/profile">🖼️ 个体心理画像</router-link>
       </nav>
       <div class="sidebar-footer">
         <div class="footer-version">v2.1 · 心理健康评估平台</div>
@@ -53,6 +55,8 @@ const titles = {
   ExperimentView: "心理教学实验",
   ClassicExperiments: "经典心理学实验",
   VirtualSubject: "虚拟被试教学演练",
+  Sjt: "情境判断测验 SJT",
+  PsychologicalProfile: "个体多维心理画像",
 };
 const pageTitle = computed(() => titles[route.name] || "心镜");
 

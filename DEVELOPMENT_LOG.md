@@ -1,7 +1,68 @@
 # 心镜 · 开发日志
 
 > 记录每次升级的背景、改动内容、验证结果，供协作者同步进度。
-> 版本基线：v2.8.0
+> 版本基线：v2.9.0
+
+---
+
+## 2026-09-27 — 升级批次：统计检验 · 情境测验 · 个体画像（v2.9.0 增量）
+
+### 一、升级背景
+
+围绕参赛规则六项评分中「创新性（20 分）」与「应用效果（20 分）」的得分点，
+在已有筛查-评估闭环基础上补齐三个证据链环节：**诊断算法判别能力可量化检验**（ROC AUC）、
+**情境化应对倾向测量**（SJT）、**多源证据综合画像**（个体画像）。
+三项均以学术文献为支撑（见各节文献），避免"凭空加功能"。
+
+### 二、升级内容详解（3 项）
+
+#### 1. 诊断一致性统计检验（升级 26）
+- `backend/services/scale_stats.py` 新增：
+  - `roc_auc`：Mann-Whitney U 秩和法计算 AUC（含并列平均秩处理）
+  - `roc_points`：ROC 曲线点集（FPR/TPR）
+- `backend/services/diagnostic_calibration.py` 新增 `statistics` 块：
+  - `roc_auc` / `roc_curve` / `pearson_r_scale_theta` / `cohen_kappa`
+  - `is_synthetic`（合成数据标记）+ `literature_benchmarks`（文献基准对照）
+  - interpretation 扩展：AUC 判别等级（0.7~0.9 中等、≥0.9 高）、Kappa 一致性等级
+- 前端：虚拟被试页校准区块新增统计卡片（ROC AUC / Pearson r / Kappa + 文献基准）
+  与 ECharts ROC 曲线图（含随机基准虚线 AUC=0.5）
+- 文献支撑：Swets (1988) 判别能力框架；Ebert et al. (2019) 抑郁筛查 AUC≈0.73；
+  Han et al. (2022) 风险画像 AUC≈0.947；Zhang et al. (2013) PHQ-9 中国大学生 AUC=0.977；
+  汪大勋等 CD-CAT-D AUC 0.80~0.90
+
+#### 2. 情境判断测验 SJT（升级 27）
+- `data/scales/SJT.json`：10 个校园压力情境 × 6 维度
+  （exam_anxiety / academic_stress / peer_conflict / social_avoidance /
+  emotion_regulation / help_seeking），每题 4 选项带 score(0-3) 与 note
+- `backend/services/sjt.py`：题库加载 / 公开题目（不泄露分值）/
+  score_sjt（维度分 + 总分 + 风险信号 + 建议）/ 虚拟被试按 θ 合成作答 / method_note 文献标注
+- 新增 API：`GET /api/sjt/questions`、`POST /api/sjt/submit`、`POST /api/sjt/assess`
+- 前端：新增 SJT 页（手动作答 / 虚拟被试双模式）+ 结果组件
+  （ECharts 雷达图 + 维度条 + 风险信号 + 建议）
+- 文献支撑：Weekley & Jones (1999) 行为倾向型 SJT；McDaniel et al. (2003)
+  知识型/行为倾向型指令区分；Webster et al. (2020) 元分析 pooled r=0.32；
+  Harenbrock et al. (2023) 重测信度 pooled r=0.698
+
+#### 3. 个体多维心理画像（升级 28）
+- `backend/services/psychological_profile.py`：
+  - `build_student_profile`：真实学生聚合（缺维度不填充，不虚构）
+  - `build_virtual_profile`：虚拟被试全套画像
+    （SCL-90 十维 / SAS / SDS / PSS / PANAS + E1-E12 常模 Z 分与 K 值 +
+    风险分级 + SJT 合成画像 + 诊断一致性）
+- 新增 API：`GET /api/psychological-profile/{student_id}`、`POST /api/psychological-profile/virtual`
+- 前端：新增画像页——SCL-90 雷达 + E1-E12 三组雷达 + Z 分条形 +
+  量表分 + SJT 画像 + 风险/建议/一致性
+- 文献支撑：HealthPrism 多模态健康画像（Jiang et al., 2023, IEEE TVCG）；
+  临床仪表盘维度化布局（Wake et al., 2022, JMIR）；星图压力可视化（Holzinger et al., 2013）
+
+### 三、验证结果
+
+- 新增 `tests/test_upgrades26_28.py` 14 项测试（ROC 三例 / 校准统计字段 / SJT 四例 / 画像四例）
+- 修复一次测试问题：随机数据下 ROC 曲线用直线排列导致 AUC=0.33，
+  改插花排列（正负样本交替）后通过
+- 全量回归 **205 passed 无回归**（基线 191 + 新增 14）
+- 前端 vite build 通过（SjtView 8.43kB / PsychologicalProfileView 10.03kB）
+- 冒烟验证：SJT questions=10、Profile OK（轻度焦虑/高风险）、Calib AUC=1.0，server 已停
 
 ---
 

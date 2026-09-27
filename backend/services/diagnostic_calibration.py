@@ -9,8 +9,17 @@
   - 情绪总体一致率：系统情绪判定与真值情绪一致的比例
   - 灵敏度（阳性检出率）：阳性剖面中被判定为非正常的比例
   - 特异度（阴性正确率）：健康对照剖面中被判定为正常的比例
+  - ROC AUC：风险分数对「真值阳性」判定的曲线下面积（统计检验）
+  - Pearson r：量表标准分与潜在特质 θ 的相关（量表效度代理指标）
+  - Cohen's Kappa：判定等级与真值等级的二值一致性（统计检验）
   - 各剖面明细：样本数 / 一致率 / 平均判定等级 / 边界案例
   - 边界案例：判定等级与真值等级相差 ≥2 级的样本数
+
+文献基准（用于对照说明，合成数据仅作方法演示）：
+  - Ebert et al. (2019)：抑郁风险筛选 AUC≈0.73
+  - Han et al. (2022)：机器学习风险画像 AUC≈0.947
+  - PHQ-9 中国大学生样本（Zhang et al., 2013）：AUC=0.977
+  - CD-CAT-D（汪大勋等）：AUC 0.80~0.90
 
 全部基于合成数据（is_synthetic=True），不涉及真实样本。
 """
@@ -24,10 +33,19 @@ from backend.services.virtual_subject import (
     generate_virtual_subject,
     auto_diagnose,
 )
+from backend.services.scale_stats import pearson_r, cohen_kappa, roc_auc, roc_points
 
 _LEVEL_ORDER = ["normal", "mild", "moderate", "severe"]
 _LEVEL_RANK = {lvl: i for i, lvl in enumerate(_LEVEL_ORDER)}
 _LEVEL_CN_MAP = {"正常": "normal", "轻度": "mild", "中度": "moderate", "重度": "severe"}
+
+# 文献对照基准（来源见文件头注释）
+LITERATURE_BENCHMARKS = [
+    {"source": "Ebert et al. (2019) 抑郁风险筛选", "metric": "AUC", "value": 0.73},
+    {"source": "Han et al. (2022) 风险画像", "metric": "AUC", "value": 0.947},
+    {"source": "PHQ-9 中国大学生 (Zhang et al., 2013)", "metric": "AUC", "value": 0.977},
+    {"source": "CD-CAT-D (汪大勋等)", "metric": "AUC", "value": "0.80~0.90"},
+]
 
 
 def _level_cn_to_rank(cn: str) -> int:
@@ -88,6 +106,14 @@ def run_diagnostic_calibration(
     negative_total = 0      # 健康对照样本总数
     negative_correct = 0    # 健康对照被判为正常数
 
+    # 统计检验收集（ROC AUC / Pearson r / Kappa）
+    risk_scores: list[float] = []        # 系统风险分数（连续）
+    positive_labels: list[bool] = []     # 真值阳性（等级≥mild）
+    scale_std_scores: list[float] = []   # 主导量表标准分
+    true_thetas: list[float] = []        # 真值潜在特质
+    pred_binary: list[bool] = []         # 系统判定阳性
+    true_binary: list[bool] = []         # 真值阳性
+
     for profile in PROFILES:
         pid = profile["id"]
         pc = ProfileCalibration(profile_id=pid, profile_name=profile["name"], n=n_per_profile)
@@ -122,6 +148,19 @@ def run_diagnostic_calibration(
                 positive_total += 1
                 positive_detected += int(pred_rank >= 1)
 
+            # 统计检验数据收集
+            truth = subject["ground_truth"]
+            risk = result.get("risk_diagnosis", {})
+            risk_scores.append(float(risk.get("score", 0.0)) if risk.get("score") is not None else 0.0)
+            positive_labels.append(true_rank >= 1)
+            dominant = truth.get("dominant_scale", "SAS")
+            scale_scores = truth.get("scale_scores", {})
+            dom = scale_scores.get(dominant, {})
+            scale_std_scores.append(float(dom.get("standard_score", 0.0)) if dom.get("standard_score") is not None else 0.0)
+            true_thetas.append(float(truth.get("theta", 0.0)))
+            pred_binary.append(pred_rank >= 1)
+            true_binary.append(true_rank >= 1)
+
         details.append(pc)
 
     overall_scale_acc = round(total_scale_match / total * 100, 1) if total else 0.0
@@ -129,6 +168,12 @@ def run_diagnostic_calibration(
     sensitivity = round(positive_detected / positive_total * 100, 1) if positive_total else 0.0
     specificity = round(negative_correct / negative_total * 100, 1) if negative_total else 0.0
     boundary_total = sum(d.boundary_cases for d in details)
+
+    # 统计检验结果
+    auc = roc_auc(risk_scores, positive_labels)
+    roc_pts = roc_points(risk_scores, positive_labels)
+    pearson = pearson_r(scale_std_scores, true_thetas)
+    kappa = cohen_kappa(true_binary, pred_binary)
 
     # 按一致率升序排（暴露最需要关注的剖面）
     details_sorted = sorted(details, key=lambda d: (d.scale_accuracy, d.emotion_accuracy))
@@ -142,6 +187,15 @@ def run_diagnostic_calibration(
         "sensitivity": sensitivity,
         "specificity": specificity,
         "boundary_cases": boundary_total,
+        "statistics": {
+            "roc_auc": auc,
+            "roc_curve": roc_pts,
+            "pearson_r_scale_theta": pearson,
+            "cohen_kappa": kappa,
+            "n": total,
+            "is_synthetic": True,
+            "literature_benchmarks": LITERATURE_BENCHMARKS,
+        },
         "profile_details": [
             {
                 "profile_id": d.profile_id,
@@ -158,6 +212,7 @@ def run_diagnostic_calibration(
         "interpretation": _build_interpretation(
             overall_scale_acc, overall_emotion_acc,
             sensitivity, specificity, boundary_total, total,
+            auc=auc, pearson=pearson, kappa=kappa,
         ),
     }
 
@@ -169,6 +224,9 @@ def _build_interpretation(
     specificity: float,
     boundary: int,
     total: int,
+    auc: float | None = None,
+    pearson: float | None = None,
+    kappa: float | None = None,
 ) -> str:
     """生成校准结论文字。"""
     parts = [
@@ -176,6 +234,22 @@ def _build_interpretation(
         f"情绪一致率为 {emotion_acc}%、灵敏度（阳性检出率）为 {sensitivity}%、"
         f"特异度（阴性正确率）为 {specificity}%。"
     ]
+    if auc is not None:
+        if auc >= 0.9:
+            parts.append(f"风险分数对真值阳性的 ROC AUC 为 {auc}（≥0.90，判别能力极佳，"
+                         "参考 Swets, 1988 的判别等级）。")
+        elif auc >= 0.8:
+            parts.append(f"风险分数对真值阳性的 ROC AUC 为 {auc}（0.80~0.90，判别能力良好，"
+                         "处于 CD-CAT-D 文献报告区间 0.80~0.90 内）。")
+        else:
+            parts.append(f"风险分数对真值阳性的 ROC AUC 为 {auc}，判别能力一般，"
+                         "建议进一步调整风险分数构成。")
+    if pearson is not None:
+        parts.append(f"量表标准分与潜在特质 θ 的 Pearson 相关为 {pearson}（量表效度的代理指标，"
+                     "|r|≥0.70 提示与特质强相关）。")
+    if kappa is not None:
+        parts.append(f"判定等级与真值等级的二值一致性 Cohen's Kappa 为 {kappa}"
+                     "（κ≥0.61 为实质性一致，0.41~0.60 为中等一致）。")
     if sensitivity >= 95:
         parts.append("阳性剖面检出能力强，风险学生不易漏检。")
     elif sensitivity >= 85:
