@@ -173,7 +173,22 @@ Xinjing/
 │   │   ├── diagnostic_calibration.py # 诊断算法校准（灵敏度/特异度/一致率）
 │   │   ├── emotion_forecast.py # 情绪预测与异常检测
 │   │   └── ...
+│   ├── gpu/                    # ⭐ 通用 GPU 适配组件（可复用，不依赖业务）
+│   │   ├── backend.py          # MUSA/CUDA/CPU 自动探测 + 加速 + 基准
+│   │   └── __init__.py         # 公开 API（detect_gpu/to_gpu/histogram/...）
+│   ├── agents/
+│   │   ├── framework/          # ⭐ 通用 Prompt-based ReAct 框架（可复用）
+│   │   │   ├── react_framework.py  # ReactAgent + ToolSpec 通用基座
+│   │   │   └── __init__.py
+│   │   ├── base_agent.py       # 心理场景智能体基类（基于通用框架）
+│   │   └── *_agent.py          # 5 个场景智能体（感知/分析/报告/预警/编排）
+│   ├── llm/                    # 国产 LLM 平台适配（lingshu/gitee_ai/deepseek）
 │   └── models/                 # 数据模型
+├── vibraimage_engine/          # ⭐ 独立开源引擎包（可 pip 安装）
+│   ├── pyproject.toml          # 打包配置（Apache-2.0）
+│   ├── README.md / NOTICE
+│   ├── vibraimage/             # 引擎实现（core/emotions/pipeline/utils）
+│   └── tests/                  # 引擎独立测试
 ├── frontend/                   # 前端（Vue 3 + Vite）
 │   ├── src/
 │   │   ├── views/              # 页面组件
@@ -185,13 +200,14 @@ Xinjing/
 ├── scripts/                    # 脚本
 │   ├── ablation/               # 消融对照实验
 │   ├── benchmark/              # 性能基准测试
+│   ├── c500/                   # 沐曦 C500 GPU 基准
 │   └── ...
 ├── docs/                       # 技术文档
 │   ├── ablation_report.md      # 消融对照实验报告
 │   ├── cat_equivalence_report.md  # 自适应测验等价性报告
 │   ├── emotion_forecast_report.md # 情绪预测与异常检测报告
 │   └── ...
-├── tests/                      # 测试（160 项）
+├── tests/                      # 测试（190+ 项）
 ├── data/                       # 数据（SQLite、常模）
 ├── run_backend.py              # 启动脚本
 ├── requirements.txt            # Python 依赖
@@ -203,13 +219,27 @@ Xinjing/
 
 ---
 
+## 可复用开源组件
+
+本仓库除完整平台外，还提供三个与业务解耦、可独立复用的开源组件：
+
+| 组件 | 路径 | 能力 | 复用方式 |
+|---|---|---|---|
+| **VibraImage 引擎** | `vibraimage_engine/` | 白盒前庭振动情绪识别（E1-E12），独立打包 | `pip install -e ./vibraimage_engine` |
+| **GPU 适配层** | `backend/gpu/` | MUSA/CUDA/CPU 自动探测 + 统一数组接口 + 基准 | `from backend.gpu import to_gpu, histogram` |
+| **通用 ReAct 框架** | `backend/agents/framework/` | Prompt-based ReAct 智能体基座（适配不支持 function calling 的国产大模型） | `from backend.agents.framework import ReactAgent, ToolSpec` |
+
+三者均不依赖心镜业务代码，可迁移到任何其他场景复用（详见各组件目录内 README）。
+
+---
+
 ## 测试
 
 ```bash
 # 运行全部测试
 python -m pytest tests/ -v
 
-# 预期：127 passed
+# 预期：190+ passed（16 个测试文件，覆盖量表/CAT/融合/虚拟被试/预测/API）
 ```
 
 测试覆盖：

@@ -10,4 +10,4 @@ VibraImage Engine — 从零实现的VibraImage情绪识别引擎。
     results = engine.process_video("path/to/video.mp4")
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

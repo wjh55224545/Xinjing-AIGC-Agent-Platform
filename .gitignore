@@ -75,3 +75,6 @@ vibraimage_engine/项目参考资料/
 
 # 演示素材（不入库）
 data/demo/
+
+# AGPL 权重不随仓库分发
+*.pt

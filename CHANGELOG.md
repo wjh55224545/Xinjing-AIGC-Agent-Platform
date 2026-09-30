@@ -1,6 +1,36 @@
 # 更新日志
 
-## v2.9.0（统计检验 / 情境测验 / 个体画像）— 2026-09-27
+## v2.9.1（组件化开源重构）— 2026-09-30
+
+围绕「AI+开源」赛道评审口径，将核心能力重构为可复用开源组件，强化工程化价值：
+
+### VibraImage 引擎独立成可安装包
+- 新增 `vibraimage_engine/pyproject.toml`（v0.2.0，Apache-2.0），支持 `pip install -e ./vibraimage_engine`
+- 新增独立 `README.md`、`NOTICE`、`LICENSE`；版本号对齐 0.2.0
+
+### 通用 GPU 适配组件（backend/gpu）
+- 完整实现迁移至 `backend/gpu/backend.py`（MUSA/CUDA/CPU 自动探测、to_gpu/to_cpu、histogram/rfft、benchmark_context）
+- `backend/gpu/__init__.py` 公开全量 API + `register_gpu_routes`；新增组件 README
+- 旧 `backend/vibraimage/gpu_backend.py` 改为兼容转发层
+
+### 通用 Prompt-based ReAct 框架（backend/agents/framework）
+- 新增 `ReactAgent + ToolSpec` 通用基座（不依赖 LangChain、不依赖业务），支持 <tool_call>JSON</tool_call> 工具调用循环
+- `base_agent.py` 委托通用框架实现 prompt-based ReAct 循环，5 个场景智能体行为不变
+- `platform_adapter.py` 修复 langchain 缺失时模块导入崩溃（占位类兜底）
+
+### 合规红线处理
+- `yolov8n.pt`（AGPL-3.0）移出版本控制（`git rm --cached`），`.gitignore` 新增 `*.pt`
+- 确认 4 个参考资料 PDF 从未入库（.gitignore 已覆盖）
+
+### 材料同步
+- 参赛材料（简介/技术报告/资源清单）同步至 v2.9，`docs/competition/` 随仓库开放
+- README 新增「可复用开源组件」章节
+
+### 验证
+- 全部改动文件语法编译通过；引擎包可安装导入；GPU/Agent 组件无 langchain 亦可导入
+- 全量测试待依赖环境跑通（tests/ 16 文件 190+ 用例）
+
+
 
 围绕「创新性」与「应用效果」得分点，补齐诊断证据链三环节：
 

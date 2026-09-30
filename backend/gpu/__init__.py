@@ -1,18 +1,51 @@
 """
-GPU 信息模块 — 提供GPU检测、状态查询API端点。
+通用 GPU 计算后端组件（可复用）— 自动探测 + 适配层
+
+一个与业务解耦的国产算力适配组件，自动探测 MUSA (沐曦) / CUDA / CPU，
+提供统一的数组模块、数据传输、直方图/FFT 兼容运算与基准测试接口。
 
 用法:
-  from backend.gpu import detect_gpu, get_gpu_status
-  info = detect_gpu()  # {"available": True, "vendor": "MetaX", ...}
+  from backend.gpu import detect_gpu, get_array_module, to_gpu, to_cpu
+  info = detect_gpu()                # {"available": True, "vendor": "MetaX", ...}
+  xp = get_array_module()            # torch 或 numpy
+  result = to_gpu(x)                 # 转移到 GPU
 """
 
 from __future__ import annotations
-from backend.vibraimage.gpu_backend import detect_gpu as _vib_gpu_detect, is_gpu_available
 
+from backend.gpu.backend import (
+    detect_gpu,
+    get_array_module,
+    reset_array_module,
+    is_gpu_available,
+    to_gpu,
+    to_cpu,
+    ensure_float32,
+    histogram,
+    rfft,
+    rfftfreq,
+    benchmark_context,
+    get_benchmark_records,
+    clear_benchmark_records,
+    get_gpu_info,
+)
 
-def detect_gpu() -> dict:
-    """检测GPU并返回完整信息。"""
-    return _vib_gpu_detect()
+__all__ = [
+    "detect_gpu",
+    "get_array_module",
+    "reset_array_module",
+    "is_gpu_available",
+    "to_gpu",
+    "to_cpu",
+    "ensure_float32",
+    "histogram",
+    "rfft",
+    "rfftfreq",
+    "benchmark_context",
+    "get_benchmark_records",
+    "clear_benchmark_records",
+    "get_gpu_info",
+]
 
 
 def get_gpu_status() -> dict:
@@ -23,7 +56,7 @@ def get_gpu_status() -> dict:
         dict: {"available": bool, "backend": str, "device": str,
                "vendor": str, "model": str, "memory_mb": int}
     """
-    info = _vib_gpu_detect()
+    info = detect_gpu()
     return {
         "available": info["available"],
         "backend": info["backend"],

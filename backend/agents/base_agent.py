@@ -27,13 +27,18 @@ except ImportError:
     LangChainBaseTool = object  # type: ignore
 
 from backend.llm.platform_adapter import get_llm, get_platform_info
+from backend.agents.framework import ReactAgent, ToolSpec
 
 logger = logging.getLogger(__name__)
 
 
 class BaseAgent(ABC):
     """
-    智能体抽象基类
+    智能体抽象基类（基于通用 ReactAgent 框架）
+
+    心镜心理场景智能体均基于 `backend.agents.framework.ReactAgent` 通用基座构建。
+    通用框架提供 Prompt-based ReAct 工具调用循环（适配不支持 function calling
+    的国产大模型），BaseAgent 负责心理场景的工具注册与业务上下文注入。
 
     所有智能体必须实现:
     - name: 智能体名称（中文）
@@ -154,138 +159,48 @@ class BaseAgent(ABC):
         """
         Prompt-based ReAct 循环（用于不支持 function calling 的 lingshu 平台）。
 
+        委托通用框架 `backend.agents.framework.ReactAgent` 执行：
         通过系统提示词描述工具，LLM 以 <tool_call>JSON</tool_call> 输出请求，
         Agent 在 Python 侧执行工具后将结果回传 LLM 继续推理。
         """
-        import re as _re
-        import json as _json
+        agent = self._build_react_agent()
+        result = agent.run(user_message)
 
-        MAX_ITERATIONS = 5
+        return {
+            "agent_name": self.name,
+            "final_answer": result["final_answer"],
+            "messages": result["messages"],
+            "platform": self._get_platform_name(),
+        }
 
-        # 构建带工具描述的系统提示词
-        tool_descs = []
+    def _build_react_agent(self) -> ReactAgent:
+        """
+        基于通用框架构建 ReAct 智能体（工具为 LangChain 工具的适配）。
+
+        将本智能体注册的 LangChain 工具转换为通用 `ToolSpec`，
+        使通用框架的 prompt-based 循环可直接调用。
+        """
+        tool_specs = []
         for t in self._tools:
             t_name = getattr(t, 'name', 'unknown')
             t_desc = getattr(t, 'description', '')
-            tool_descs.append(f"- **{t_name}**: {t_desc}")
-        tool_list = "\n".join(tool_descs) if tool_descs else "无可用工具"
-
-        react_sys = f"""{self._get_system_prompt()}
-
-## 工具使用说明
-
-你需要通过指定格式来请求工具调用。当需要使用工具时，输出：
-
-<tool_call>
-{{"name": "工具名称", "arguments": {{"参数名": "参数值"}} }}
-</tool_call>
-
-系统会自动执行工具并把结果返回给你，你基于结果继续推理。
-
-## 当前可用工具
-
-{tool_list}
-
-## 规则
-1. 一次只请求一个工具调用
-2. JSON 必须合法且参数名与工具定义一致
-3. 最终答案用自然语言，不要包含 <tool_call> 标签
-4. 不需要工具就直接回答"""
-
-        history = [{"role": "system", "content": react_sys}]
-        all_messages = []
-        executed_tools = set()  # 防止重复调用同一工具
-
-        for iteration in range(MAX_ITERATIONS):
-            # 构建用户消息
-            if iteration == 0:
-                history.append({"role": "user", "content": user_message})
-            all_messages.append(("user" if iteration == 0 else "system", user_message if iteration == 0 else ""))
-
-            # 调用 LLM
-            try:
-                result = self.llm.invoke(history)
-                response = result.content if hasattr(result, 'content') else str(result)
-            except Exception as e:
-                logger.error(f"LLM调用失败: {e}")
-                response = f"[LLM调用失败: {e}]"
-
-            all_messages.append(("assistant", response))
-            history.append({"role": "assistant", "content": response})
-
-            # 检查是否有工具调用（支持 <tool_call> 标签和裸 JSON 两种格式）
-            tool_json = None
-            match = _re.search(
-                r'<tool_call>\s*(.*?)\s*</tool_call>', response, _re.DOTALL
-            )
-            if match:
-                tool_json = match.group(1)
-            else:
-                # 尝试匹配裸 JSON 格式: {"name": "...", "arguments": {...}}
-                json_match = _re.search(
-                    r'\{[^{}]*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^{}]*\}\s*\}',
-                    response, _re.DOTALL
+            tool_specs.append(
+                ToolSpec(
+                    name=t_name,
+                    description=t_desc,
+                    func=lambda args, _t=t: _t.invoke(args),
                 )
-                if json_match:
-                    tool_json = json_match.group(0)
+            )
 
-            if not tool_json:
-                return {
-                    "agent_name": self.name,
-                    "final_answer": response,
-                    "messages": [str(m) for m in all_messages],
-                    "platform": self._get_platform_name(),
-                }
-
-            # 解析并执行工具
-            try:
-                tool_req = _json.loads(tool_json)
-                tool_name = tool_req.get("name", "")
-                tool_args = tool_req.get("arguments", {})
-            except _json.JSONDecodeError:
-                # JSON 解析失败，可能不是真正的工具调用，返回答案
-                return {
-                    "agent_name": self.name,
-                    "final_answer": response,
-                    "messages": [str(m) for m in all_messages],
-                    "platform": self._get_platform_name(),
-                }
-
-            # 防止重复调用同一工具（循环检测）
-            call_key = f"{tool_name}:{_json.dumps(tool_args, sort_keys=True)}"
-            if call_key in executed_tools:
-                return {
-                    "agent_name": self.name,
-                    "final_answer": response,
-                    "messages": [str(m) for m in all_messages],
-                    "platform": self._get_platform_name(),
-                }
-            executed_tools.add(call_key)
-
-            # 执行工具
-            tool_result = f"错误: 未找到工具 '{tool_name}'"
-            for tool in self._tools:
-                if getattr(tool, 'name', '') == tool_name:
-                    try:
-                        tool_result = str(tool.invoke(tool_args))[:2000]
-                    except Exception as e:
-                        tool_result = f"工具执行失败: {e}"
-                    break
-
-            all_messages.append(("tool_result", tool_result))
-            history.append({
-                "role": "user",
-                "content": f"[工具 {tool_name} 的执行结果]\n{tool_result}\n\n请基于以上结果继续推理。"
-            })
-            logger.info(f"Agent [{self.name}] 执行工具: {tool_name}")
-
-        # 超过最大迭代次数
-        return {
-            "agent_name": self.name,
-            "final_answer": all_messages[-1][1] if all_messages else "",
-            "messages": [str(m) for m in all_messages],
-            "platform": self._get_platform_name(),
-        }
+        agent = ReactAgent(
+            name=self.name,
+            description=self.description,
+            system_prompt=self._get_system_prompt(),
+            llm=self.llm,
+            tools=tool_specs,
+            max_iterations=5,
+        )
+        return agent
 
     async def stream_think(self, message: str, context: dict | None = None):
         """

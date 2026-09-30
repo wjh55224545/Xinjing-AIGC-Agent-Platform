@@ -38,55 +38,67 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-class ExtraBodyChatOpenAI(ChatOpenAI):
-    """
-    扩展 ChatOpenAI，支持 extra_body 参数。
+if _LANGCHAIN_AVAILABLE:
 
-    某些非标准API（如灵枢Lingshu-32B）需要在请求体中传递
-    额外参数（如 top_k），这些参数不属于标准 OpenAI API，
-    需要放在 HTTP 请求体的 extra_body 字段中。
+    class ExtraBodyChatOpenAI(ChatOpenAI):
+        """
+        扩展 ChatOpenAI，支持 extra_body 参数。
 
-    Usage:
-        llm = ExtraBodyChatOpenAI(
-            model="Lingshu-32B",
-            base_url="https://api.moark.com/v1",
-            api_key="...",
-            extra_body={"top_k": -1},
-        )
-    """
+        某些非标准API（如灵枢Lingshu-32B）需要在请求体中传递
+        额外参数（如 top_k），这些参数不属于标准 OpenAI API，
+        需要放在 HTTP 请求体的 extra_body 字段中。
 
-    extra_body: dict | None = None
+        Usage:
+            llm = ExtraBodyChatOpenAI(
+                model="Lingshu-32B",
+                base_url="https://api.moark.com/v1",
+                api_key="...",
+                extra_body={"top_k": -1},
+            )
+        """
 
-    def _get_request_payload(self, input_, *, stop=None, **kwargs):
-        """重写 _get_request_payload，注入 extra_body 并移除不兼容参数。"""
-        kwargs.pop("tool_choice", None)
-        if self.extra_body:
-            kwargs["extra_body"] = self.extra_body
-        return super()._get_request_payload(input_, stop=stop, **kwargs)
+        extra_body: dict | None = None
 
-    def _generate(
-        self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
-        **kwargs: Any,
-    ) -> ChatResult:
-        kwargs.pop("tool_choice", None)
-        if self.extra_body:
-            kwargs["extra_body"] = self.extra_body
-        return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        def _get_request_payload(self, input_, *, stop=None, **kwargs):
+            """重写 _get_request_payload，注入 extra_body 并移除不兼容参数。"""
+            kwargs.pop("tool_choice", None)
+            if self.extra_body:
+                kwargs["extra_body"] = self.extra_body
+            return super()._get_request_payload(input_, stop=stop, **kwargs)
 
-    async def _agenerate(
-        self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
-        **kwargs: Any,
-    ) -> ChatResult:
-        kwargs.pop("tool_choice", None)
-        if self.extra_body:
-            kwargs["extra_body"] = self.extra_body
-        return await super()._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        def _generate(
+            self,
+            messages: List[BaseMessage],
+            stop: Optional[List[str]] = None,
+            run_manager: Optional[CallbackManagerForLLMRun] = None,
+            **kwargs: Any,
+        ) -> ChatResult:
+            kwargs.pop("tool_choice", None)
+            if self.extra_body:
+                kwargs["extra_body"] = self.extra_body
+            return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+
+        async def _agenerate(
+            self,
+            messages: List[BaseMessage],
+            stop: Optional[List[str]] = None,
+            run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
+            **kwargs: Any,
+        ) -> ChatResult:
+            kwargs.pop("tool_choice", None)
+            if self.extra_body:
+                kwargs["extra_body"] = self.extra_body
+            return await super()._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
+
+else:
+
+    class ExtraBodyChatOpenAI:  # type: ignore
+        """langchain 未安装时的占位类（保证模块可导入）。"""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                "langchain_openai 未安装。请运行: pip install langchain-openai"
+            )
 
 
 class Platform(Enum):
