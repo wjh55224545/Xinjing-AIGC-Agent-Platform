@@ -208,7 +208,7 @@ Xinjing/
 │   ├── cat_equivalence_report.md  # 自适应测验等价性报告
 │   ├── emotion_forecast_report.md # 情绪预测与异常检测报告
 │   └── ...
-├── tests/                      # 测试（230+ 项）
+├── tests/                      # 测试（250+ 项）
 ├── data/                       # 数据（SQLite、常模）
 ├── run_backend.py              # 启动脚本
 ├── requirements.txt            # Python 依赖

@@ -73,9 +73,16 @@ class FaceDetector:
     def _load_haar_cascade(self):
         """加载OpenCV Haar Cascade作为后备方案。"""
         cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        self._face_cascade = cv2.CascadeClassifier(cascade_path)
-        self._use_haar = True
-        logger.info("使用Haar Cascade人脸检测")
+        try:
+            self._face_cascade = cv2.CascadeClassifier(cascade_path)
+            self._use_haar = True
+            logger.info("使用Haar Cascade人脸检测")
+        except Exception as e:
+            logger.warning(
+                f"Haar Cascade不可用({e})，将使用全帧ROI模式"
+                "（适配人脸已居中的标准抽帧视频）"
+            )
+            self._use_haar = False
 
     def detect_face_roi(self, frame: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
         """
@@ -93,8 +100,11 @@ class FaceDetector:
         """
         if self.model is not None:
             return self._detect_yolo(frame)
-        else:
+        if getattr(self, "_use_haar", False):
             return self._detect_haar(frame)
+        # 全帧ROI模式: 人脸已居中(如 RAVDESS 标准抽帧)，整帧即 ROI
+        H, W = frame.shape[:2]
+        return (0, 0, W, H)
 
     def _detect_yolo(self, frame: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
         """YOLOv8检测。"""

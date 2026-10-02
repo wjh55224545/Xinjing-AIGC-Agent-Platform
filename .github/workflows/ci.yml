@@ -36,8 +36,8 @@ jobs:
 
       - name: 运行全量测试
         run: |
-          python -m pytest tests/ -q
-          echo "TEST_COUNT=$(python -m pytest tests/ --collect-only -q | tail -1)" >> $GITHUB_ENV
+          python -m pytest tests/ vibraimage_engine/tests -q
+          echo "TEST_COUNT=$(python -m pytest tests/ vibraimage_engine/tests --collect-only -q | tail -1)" >> $GITHUB_ENV
 
       - name: 输出测试统计
         run: echo "收集到的测试：${{ env.TEST_COUNT }}"
