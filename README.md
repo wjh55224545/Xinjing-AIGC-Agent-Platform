@@ -7,6 +7,7 @@
 [![Vue](https://img.shields.io/badge/Vue-3.x-4FC08D.svg)](https://vuejs.org/)
 [![VibraImage](https://img.shields.io/badge/引擎-VibraImage-purple.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)](LICENSE)
+[![CI](https://github.com/wjh55224545/Xinjing-AIGC-Agent-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/wjh55224545/Xinjing-AIGC-Agent-Platform/actions/workflows/ci.yml)
 
 ---
 
@@ -207,7 +208,7 @@ Xinjing/
 │   ├── cat_equivalence_report.md  # 自适应测验等价性报告
 │   ├── emotion_forecast_report.md # 情绪预测与异常检测报告
 │   └── ...
-├── tests/                      # 测试（190+ 项）
+├── tests/                      # 测试（230+ 项）
 ├── data/                       # 数据（SQLite、常模）
 ├── run_backend.py              # 启动脚本
 ├── requirements.txt            # Python 依赖
@@ -239,7 +240,7 @@ Xinjing/
 # 运行全部测试
 python -m pytest tests/ -v
 
-# 预期：190+ passed（16 个测试文件，覆盖量表/CAT/融合/虚拟被试/预测/API）
+# 预期：233 passed（16 个测试文件，覆盖量表/CAT/融合/虚拟被试/预测/API）
 ```
 
 测试覆盖：

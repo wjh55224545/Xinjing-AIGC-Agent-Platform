@@ -25,8 +25,22 @@ jobs:
       - name: 安装测试依赖
         run: pip install -r requirements-ci.txt
 
+      - name: 安装引擎包（组件冒烟：验证 pyproject 可安装）
+        run: pip install -e ./vibraimage_engine --no-deps
+
+      - name: 组件导入冒烟（GPU 适配层 / 通用 ReAct 框架）
+        run: |
+          python -c "from backend.gpu import detect_gpu, get_array_module; print('GPU组件 OK')"
+          python -c "from backend.agents.framework import ReactAgent, ToolSpec; print('Agent框架 OK')"
+          python -c "import vibraimage; print('引擎包 OK', vibraimage.__version__)"
+
       - name: 运行全量测试
-        run: python -m pytest tests/ -q
+        run: |
+          python -m pytest tests/ -q
+          echo "TEST_COUNT=$(python -m pytest tests/ --collect-only -q | tail -1)" >> $GITHUB_ENV
+
+      - name: 输出测试统计
+        run: echo "收集到的测试：${{ env.TEST_COUNT }}"
 
   frontend-build:
     name: 前端构建

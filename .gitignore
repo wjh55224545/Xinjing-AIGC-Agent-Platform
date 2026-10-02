@@ -16,6 +16,8 @@ data/*.db
 data/*.sqlite
 data/*.sqlite3
 *.db
+# RAVDESS 数据集（CC BY-NC-SA 4.0，数据不随仓库分发）
+data/ravdess/
 
 # 环境变量
 .env

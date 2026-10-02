@@ -1,5 +1,29 @@
 # 更新日志
 
+## v2.9.2（组件测试与 CI 工程化加固）— 2026-10-02
+
+围绕「实现完成度与可验证效果」得分点，为可复用组件补齐专属测试并加固 CI：
+
+### 组件测试补齐
+- 新增 `tests/test_gpu_backend.py`（16 项）：GPU 探测结构/强制 numpy 后端/探测缓存/数组模块选择/to_cpu/float32 转换/直方图与权重对齐 numpy/rfft/rfftfreq 对齐/基准上下文开关/状态快照/is_gpu_available
+- 新增 `tests/test_agent_framework.py`（12 项）：ToolSpec 执行与异常/工具注册/直答/工具循环/多工具顺序/未知工具反馈/循环检测/最大迭代/上下文注入/提示词构建，使用内存假 LLM 不依赖外部 API
+
+### 通用框架独立导入修复
+- `backend/agents/__init__.py` 改为惰性导入（`__getattr__`），业务智能体按需加载，通用框架在无 langchain 环境亦可独立导入使用
+
+### CI 扩展
+- `.github/workflows/ci.yml` 新增：引擎包安装冒烟（`pip install -e ./vibraimage_engine`）、组件导入冒烟（GPU 适配层/ReAct 框架/引擎包）、测试统计输出
+- README 新增 GitHub Actions CI badge
+
+### 测试数口径统一
+- 全量测试实测 **233 passed**（205 + 新增 28 项），README/参赛材料统一为「230+ 项 / 233 tests passed」
+
+### 数据与合规
+- 新增 `scripts/data/download_ravdess.py`：RAVDESS 公开情绪数据集（Livingstone & Russo, 2018, PLoS ONE）选择性下载脚本，按 actor/模态下载并校验 md5，数据目录 `data/ravdess` 已 gitignore（CC BY-NC-SA 4.0 非商业许可，数据不随仓库分发）
+
+### 验证
+- 全量测试 **233 passed，无回归**；组件导入冒烟通过
+
 ## v2.9.1（组件化开源重构）— 2026-09-30
 
 围绕「AI+开源」赛道评审口径，将核心能力重构为可复用开源组件，强化工程化价值：
