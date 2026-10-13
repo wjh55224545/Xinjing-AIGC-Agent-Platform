@@ -28,7 +28,7 @@ PRODUCTION = os.getenv("PRODUCTION", "0") == "1" or "--dev" not in sys.argv
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  心镜·AIGC智能体平台 v2.4.0")
+    print("  心镜·AIGC智能体平台 v2.9.4")
     print("  面向心理健康的多模态情绪评估与智能分析平台")
     mode_str = "Production" if PRODUCTION else "Development"
     print(f"  模式: {mode_str}")

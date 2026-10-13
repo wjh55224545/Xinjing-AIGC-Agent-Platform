@@ -13,6 +13,7 @@
 """
 
 from __future__ import annotations
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
@@ -30,6 +31,20 @@ from backend.llm.platform_adapter import get_llm, get_platform_info
 from backend.agents.framework import ReactAgent, ToolSpec
 
 logger = logging.getLogger(__name__)
+
+# langgraph 0.2.40 起将 create_react_agent() 的系统提示词参数由 state_modifier 更名为 prompt，
+# 旧名在新版本中直接抛 TypeError。这里探测实际签名，按当前安装版本选用正确参数名。
+_PROMPT_KWARG: Optional[str] = None
+
+
+def _prompt_kwarg() -> str:
+    """返回当前 langgraph 版本 create_react_agent() 所用的系统提示词参数名。"""
+    global _PROMPT_KWARG
+    if _PROMPT_KWARG is None:
+        params = inspect.signature(create_react_agent).parameters
+        _PROMPT_KWARG = "prompt" if "prompt" in params else "state_modifier"
+        logger.info(f"langgraph create_react_agent 使用参数: {_PROMPT_KWARG}")
+    return _PROMPT_KWARG
 
 
 class BaseAgent(ABC):
@@ -105,11 +120,12 @@ class BaseAgent(ABC):
 
         # moark.com (lingshu) 平台不支持 function calling，使用空 tools 的 ReAct
         # 实际工具调用在 think() 方法中通过 prompt-based 循环完成
+        prompt_kwarg = _prompt_kwarg()
         if platform_id == "lingshu" or self.platform == "lingshu":
             self._agent = create_react_agent(
                 model=self.llm,
                 tools=[],  # 空工具列表，避免 function calling
-                state_modifier=self._get_system_prompt(),
+                **{prompt_kwarg: self._get_system_prompt()},
             )
             logger.info(f"智能体 [{self.name}] prompt-based Agent已构建 "
                        f"(lingshu平台), 工具数={len(self._tools)}")
@@ -117,7 +133,7 @@ class BaseAgent(ABC):
             self._agent = create_react_agent(
                 model=self.llm,
                 tools=self._tools,
-                state_modifier=self._get_system_prompt(),
+                **{prompt_kwarg: self._get_system_prompt()},
             )
             logger.info(f"智能体 [{self.name}] ReAct Agent已构建, 工具数={len(self._tools)}")
         return self._agent

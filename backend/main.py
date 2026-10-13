@@ -251,7 +251,7 @@ app = FastAPI(
         "- 📊 实时情绪监测与深度心理健康分析\n"
         "- 🔔 三级预警与多渠道反馈"
     ),
-    version="2.9.0",
+    version="2.9.4",
     lifespan=lifespan,
     docs_url=None,   # 禁用默认英文 Swagger，改用下方自定义中文页面
     redoc_url="/redoc",
@@ -369,7 +369,7 @@ def health():
     return {
         "status": "ok",
         "service": "心镜·AIGC智能体平台",
-        "version": "2.9.0",
+        "version": "2.9.4",
         "platform": platform_info,
         "model": model_info,
     }
