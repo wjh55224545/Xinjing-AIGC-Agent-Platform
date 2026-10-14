@@ -344,6 +344,17 @@ python scripts/benchmark/performance_benchmark.py --iterations 50 --concurrency 
 
 ---
 
+## 贡献
+
+我们欢迎心理学/教育学/计算机方向的同学共同改进这个项目，无论你是想修复一个 bug、补充一个量表、加一个 AI 平台适配，还是写一段文档。
+
+- 快速上手：见 [CONTRIBUTING.md](CONTRIBUTING.md)（环境搭建、开发流程、代码风格）
+- 提交问题：用 [Bug 报告](.github/ISSUE_TEMPLATE/bug_report.yml) 或 [功能建议](.github/ISSUE_TEMPLATE/feature_request.yml) 模板
+- 提交代码：Fork 后按 [PR 模板](.github/PULL_REQUEST_TEMPLATE.md) 自检清单提交
+- 独立复用：`vibraimage_engine/` 是可独立安装的前庭振动分析包，见 [引擎说明](vibraimage_engine/README.md)
+
+---
+
 ## License
 
 Apache License 2.0
