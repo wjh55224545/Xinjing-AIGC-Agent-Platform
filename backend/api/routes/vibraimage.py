@@ -40,8 +40,9 @@ def vibraimage_health():
     model_path = get_settings().vibraimage_model_path
     model_exists = os.path.exists(os.path.abspath(model_path)) if model_path else False
 
+    # YOLO 为可选增强（默认不安装，默认走 Haar／中央 ROI 后备），不参与健康判定
     return {
-        "status": "ok" if (cv2_ok and yolo_ok and model_exists) else "degraded",
+        "status": "ok" if cv2_ok else "degraded",
         "vibraimage_version": vi_version,
         "opencv_available": cv2_ok,
         "yolo_available": yolo_ok,

@@ -94,8 +94,9 @@ body {
 }
 
 .sidebar .logo {
-  padding: 28px 24px 24px;
-  font-size: 19px;
+  padding: 28px 58px 24px 24px;  /* 右侧留白避免被 ::after 装饰块遮挡文字 */
+  font-size: 17px;
+  white-space: nowrap;
   font-weight: 700;
   color: var(--text-sidebar-active);
   letter-spacing: 0.03em;

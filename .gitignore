@@ -81,6 +81,7 @@ data/demo/
 # AGPL 权重不随仓库分发
 *.pt
 
-# 前端构建产物（源码在 frontend/，构建后生成）
-static/
+# 前端构建产物：为使 `python run_backend.py` 开箱即用（无需 Node 构建），
+# 预构建的 static/ 随仓库托管；源码仍在 frontend/，改动后执行 npm run build 覆盖。
+# static/
 # wheel 安装验证虚拟环境.venv_wheel_test/

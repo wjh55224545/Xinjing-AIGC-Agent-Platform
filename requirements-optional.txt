@@ -1,0 +1,20 @@
+# 可选增强依赖（默认不安装）
+#
+#   pip install -r requirements-optional.txt
+#
+# 安装后平台会在导入成功时自动启用增强路径，导入失败自动降级为默认轻量路径，
+# 不影响核心功能运行。各组件许可义务见仓库根目录 NOTICE。
+#
+# 1) ultralytics —— AGPL-3.0，仅作为可选人脸检测增强
+#    默认安装不含此项，默认路径使用 OpenCV Haar / 画面中央 ROI 后备。
+#    模型权重（yolov8n.pt 等）不随本仓库或任何 release 分发，需用户自行获取；
+#    启用后再分发或作为网络服务提供时，须自行履行 AGPL-3.0 义务。
+ultralytics>=8.0.0
+#
+# 2) deepface + tensorflow —— MIT / Apache-2.0，可选深度面部情绪识别路径
+#    预训练权重不随仓库分发。
+deepface>=0.0.90
+tensorflow>=2.15.0
+#
+# 3) torch —— BSD-3-Clause，仅曦云 C500 等 GPU 加速时需要（下载约 2GB）
+# torch>=2.0.0

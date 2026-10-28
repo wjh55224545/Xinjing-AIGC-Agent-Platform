@@ -16,7 +16,7 @@
         <router-link to="/profile">🖼️ 个体心理画像</router-link>
       </nav>
       <div class="sidebar-footer">
-        <div class="footer-version">v2.1 · 心理健康评估平台</div>
+        <div class="footer-version">v2.9.4 · AI 心理评估与教学实验平台</div>
       </div>
     </aside>
 

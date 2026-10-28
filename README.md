@@ -1,6 +1,6 @@
 ﻿# 心镜 MindMirror
 
-> 面向学生心理健康的智能评估与诊断平台 — 多模态情绪识别 + 自适应测验 + 虚拟被试合成数据 + 情绪预测预警
+> 面向心理学专业的 AI 心理评估与教学实验平台 — 白盒前庭振动引擎 + 多模态融合 + 自适应测验 + 虚拟被试合成数据
 
 [![Python](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
@@ -17,13 +17,13 @@
 
 ## 项目简介
 
-**心镜 MindMirror** 是一个面向学生心理健康的智能评估与诊断平台。平台集成**多模态情绪识别**、**IRT 自适应测验**、**情绪预测与预警**、**焦虑抑郁风险分级筛查**四大核心技术，打造"量表高效施测、情绪多维融合、风险分级预警、筛查结果可复现"的智能心理评估闭环。
+**心镜 MindMirror** 是一个面向心理学专业教学、评估与实验教学的智能工具平台。平台集成**白盒前庭振动引擎（VibraImage）**、**多模态证据融合**、**IRT 自适应测验**、**虚拟被试合成数据**四大核心能力，解决"客观情绪测量设备贵、量表施测计分靠人工、真实被试数据难获取"三类教学痛点；同一套白盒引擎与风险分级流程也可用于高校心理筛查场景。
 
 平台以**心理测量学理论**为基础（IRT 项目反应理论、Dempster-Shafer 证据理论、经典测量理论），以**AI 多模态融合**为技术支撑（面部情绪 + 前庭振动 + 心理量表），以**虚拟被试合成数据**为验证手段，解决学生心理健康筛查中真实数据隐私敏感难获取、量表施测耗时、单一模态可信度低、筛查结果无法验证等核心痛点。
 
 ### 一句话理解
 
-**学生心理健康的"智能诊断台" — 多模态情绪识别 + 自适应测验 + 情绪预测预警 + 风险分级筛查，无需真实数据即可完成诊断算法验证与流程演示。**
+**心理学专业的"白盒情绪测量与评估台" — 摄像头即可做客观情绪测量，量表自动计分，无真实被试也能完成实验教学与算法验证。**
 
 ---
 
@@ -112,6 +112,10 @@ python -m venv .venv
 source .venv/bin/activate   # Linux/macOS
 # .venv\Scripts\activate    # Windows
 pip install -r requirements.txt
+
+# 可选增强（默认不需要安装）：YOLO 人脸检测 / DeepFace / PyTorch GPU 加速
+# 注意：ultralytics 为 AGPL-3.0，启用后须自行履行其许可义务，详见 NOTICE
+# pip install -r requirements-optional.txt
 
 # 前端依赖（仅开发时需要）
 cd frontend
@@ -230,11 +234,12 @@ Xinjing/
 │   ├── c500/                   # 沐曦 C500 GPU 基准
 │   └── ...
 ├── docs/                       # 技术文档
+│   ├── requirements_analysis.md # 需求分析：六类场景二十项痛点与功能映射
 │   ├── ablation_report.md      # 消融对照实验报告
 │   ├── cat_equivalence_report.md  # 自适应测验等价性报告
 │   ├── emotion_forecast_report.md # 情绪预测与异常检测报告
 │   └── ...
-├── tests/                      # 测试（250+ 项）
+├── tests/                      # 测试（264 项，主项目 18 个文件 + 引擎包 5 个文件）
 ├── data/                       # 数据（SQLite、常模）
 ├── run_backend.py              # 启动脚本
 ├── requirements.txt            # Python 依赖
@@ -263,10 +268,11 @@ Xinjing/
 ## 测试
 
 ```bash
-# 运行全部测试
-python -m pytest tests/ -v
+# 运行全部测试（主项目 + 引擎独立包）
+python -m pytest tests/ vibraimage_engine/tests -v
 
-# 预期：233 passed（16 个测试文件，覆盖量表/CAT/融合/虚拟被试/预测/API）
+# 预期：264 passed（23 个测试文件：tests/ 18 个 + 引擎包 5 个，
+# 覆盖量表/CAT/融合/虚拟被试/预测/API/引擎流水线）
 ```
 
 测试覆盖：

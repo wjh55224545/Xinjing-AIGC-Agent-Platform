@@ -1,0 +1,48 @@
+心镜 MindMirror（Xinjing-AIGC-Agent-Platform）
+Copyright 2026 心镜 · AIGC 智能体平台（MindMirror AIGC Agent Platform）
+
+This product is licensed under the Apache License, Version 2.0.
+See the LICENSE file in this directory for the full license text.
+
+Third-party notices
+-------------------
+This distribution includes or depends on the following third-party components.
+The full list, with versions, license types and compliance status, is provided in
+docs/ and in the competition deliverable "开源及第三方资源使用清单".
+
+- FastAPI (MIT), Uvicorn (BSD-3-Clause), SQLAlchemy (MIT), Pydantic (MIT)
+- LangChain / LangChain-OpenAI / LangGraph (MIT)
+- Vue 3 / Vue Router / Pinia / Axios / Vite (MIT), ECharts / vue-echarts (Apache-2.0)
+- OpenCV (Apache-2.0), NumPy / SciPy (BSD-3-Clause), ReportLab (BSD), Matplotlib (PSF-based)
+- APScheduler (MIT), PyYAML (MIT), python-dotenv (BSD-3-Clause)
+
+Optional components (NOT installed by default, NOT redistributed here)
+---------------------------------------------------------------------
+- ultralytics (AGPL-3.0): optional YOLO face-detection backend only. The default
+  installation does not include it and the default pipeline does not require it.
+  Model weights (e.g. yolov8n.pt) are NOT redistributed in this repository or in
+  any release artifact. Users who install and enable it must obtain the weights
+  from upstream and comply with AGPL-3.0, including its network-use (section 13)
+  obligations if they deploy a modified version as a network service.
+- DeepFace (MIT) and TensorFlow (Apache-2.0): optional deep emotion-recognition
+  path. Not installed by default; pre-trained weights are not redistributed here.
+- PyTorch (BSD-3-Clause): optional GPU backend.
+
+Data
+----
+The RAVDESS dataset (Livingstone & Russo, 2018, CC BY-NC-SA 4.0) is used only for
+local, non-commercial method validation. No audio, video or derived sample from
+RAVDESS is redistributed in this repository or in any release artifact; it is
+fetched by a download script that users run themselves.
+
+Algorithmic attribution
+-----------------------
+The VibraImage-based vestibular vibration parameters (E1-E12) and the K-value
+norm referenced by this project are based on formulas published in:
+
+  V. A. Minkin, "Vibraimage, Cybernetics and Emotions", Elsys Corp., 2020.
+
+The implementation in vibraimage_engine/ is an independent clean-room
+implementation written by the project team from the published formulas; no
+upstream source code from the original product is copied, and the original
+product's proprietary data or binaries are not redistributed.
